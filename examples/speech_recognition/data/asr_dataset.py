@@ -32,7 +32,8 @@ class AsrDataset(FairseqDataset):
     def __init__(
         self, aud_paths, aud_durations_ms, tgt,
         tgt_dict, ids, speakers,
-        num_mel_bins=80, frame_length=25.0, frame_shift=10.0
+        num_mel_bins=80, frame_length=25.0, frame_shift=10.0,
+        skip_normalization=False
     ):
         assert frame_length > 0
         assert frame_shift > 0
@@ -55,6 +56,7 @@ class AsrDataset(FairseqDataset):
         self.num_mel_bins = num_mel_bins
         self.frame_length = frame_length
         self.frame_shift = frame_shift
+        self.skip_normalization = skip_normalization
 
         self.s2s_collater = Seq2SeqCollater(
             0, 1, pad_index=self.tgt_dict.pad(),
@@ -76,8 +78,10 @@ class AsrDataset(FairseqDataset):
             frame_length=self.frame_length,
             frame_shift=self.frame_shift
         )
-        output_cmvn = data_utils.apply_mv_norm(output)
-
+        if not self.skip_normalization:
+            output_cmvn = data_utils.apply_mv_norm(output)
+        else:
+            output_cmvn = output
         return {"id": index, "data": [output_cmvn.detach(), tgt_item]}
 
     def __len__(self):

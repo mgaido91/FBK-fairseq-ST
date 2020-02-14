@@ -7,14 +7,14 @@ import json
 import os
 import re
 
-import torch
-from fairseq.data import Dictionary
+from examples.speech_recognition.data.fbank_dataset import FilterBanksDataset, FilterBankToTextDataset
+from fairseq.data import Dictionary, data_utils
 from fairseq.tasks import FairseqTask, register_task
 from examples.speech_recognition.data import AsrDataset
 from examples.speech_recognition.data.replabels import replabel_symbol
 
 
-def get_asr_dataset_from_json(data_json_path, tgt_dict):
+def get_asr_dataset_from_json(data_json_path, tgt_dict, skip_norm):
     """
     Parse data json and create dataset.
     See scripts/asr_prep_json.py which pack json from raw files
@@ -61,7 +61,19 @@ def get_asr_dataset_from_json(data_json_path, tgt_dict):
         ]
         # append eos
         tgt = [[*t, tgt_dict.eos()] for t in tgt]
-        return AsrDataset(aud_paths, frame_sizes, tgt, tgt_dict, ids, speakers)
+        return AsrDataset(aud_paths, frame_sizes, tgt, tgt_dict, ids, speakers, skip_normalization=skip_norm)
+
+
+def get_datasets_from_indexed_filterbanks(data_path, tgt_lang, tgt_dict, split, dataset_impl, skip_norm):
+    """
+    Creates a dataset reading precomputed filterbanks adn the corresponding target saved as indexed datasets.
+    """
+    assert tgt_lang is not None
+    prefix = os.path.join(data_path, split)
+
+    src_dataset = FilterBanksDataset(prefix + ".npz", dataset_impl == "cached")
+    tgt_dataset = data_utils.load_indexed_dataset(prefix + "." + tgt_lang, tgt_dict, dataset_impl)
+    return FilterBankToTextDataset(src_dataset, tgt_dataset, tgt_dict, skip_normalization=skip_norm)
 
 
 @register_task("speech_recognition")
@@ -77,6 +89,14 @@ class SpeechRecognitionTask(FairseqTask):
         parser.add_argument(
             "--silence-token", default="\u2581", help="token for silence (used by w2l)"
         )
+        parser.add_argument(
+            "--dataset-from-json", default=False,
+            help="whether to read the data from a JSON file or from indexed data containing "
+                 "the precomputed filterbanks")
+        parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
+                            help='target language')
+        parser.add_argument('--skip-normalization', action='store_true', default=False,
+                            help='if set, the input filterbanks are not normalized')
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
@@ -85,7 +105,11 @@ class SpeechRecognitionTask(FairseqTask):
     @classmethod
     def setup_task(cls, args, **kwargs):
         """Setup the task (e.g., load dictionaries)."""
-        dict_path = os.path.join(args.data, "dict.txt")
+        if args.target_lang is None:
+            dict_basename = "dict.txt"
+        else:
+            dict_basename = "dict.{}.txt".format(args.target_lang)
+        dict_path = os.path.join(args.data, dict_basename)
         if not os.path.isfile(dict_path):
             raise FileNotFoundError("Dict not found: {}".format(dict_path))
         tgt_dict = Dictionary.load(dict_path)
@@ -105,8 +129,18 @@ class SpeechRecognitionTask(FairseqTask):
         Args:
             split (str): name of the split (e.g., train, valid, test)
         """
-        data_json_path = os.path.join(self.args.data, "{}.json".format(split))
-        self.datasets[split] = get_asr_dataset_from_json(data_json_path, self.tgt_dict)
+        if self.args.dataset_from_json:
+            data_json_path = os.path.join(self.args.data, "{}.json".format(split))
+            ds = get_asr_dataset_from_json(data_json_path, self.tgt_dict, self.args.skip_normalization)
+        else:
+            ds = get_datasets_from_indexed_filterbanks(
+                self.args.data,
+                self.args.target_lang,
+                self.tgt_dict,
+                split,
+                self.args.dataset_impl,
+                self.args.skip_normalization)
+        self.datasets[split] = ds
 
     def build_generator(self, args):
         w2l_decoder = getattr(args, "w2l_decoder", None)
