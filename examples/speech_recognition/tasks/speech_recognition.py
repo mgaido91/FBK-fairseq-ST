@@ -89,6 +89,10 @@ class SpeechRecognitionTask(FairseqTask):
         parser.add_argument(
             "--silence-token", default="\u2581", help="token for silence (used by w2l)"
         )
+        parser.add_argument('--max-source-positions', default=1024, type=int, metavar='N',
+                            help='max number of tokens in the source sequence')
+        parser.add_argument('--max-target-positions', default=1024, type=int, metavar='N',
+                            help='max number of tokens in the target sequence')
         parser.add_argument(
             "--dataset-from-json", default=False,
             help="whether to read the data from a JSON file or from indexed data containing "
@@ -166,3 +170,7 @@ class SpeechRecognitionTask(FairseqTask):
         """Return the source :class:`~fairseq.data.Dictionary` (if applicable
         for this task)."""
         return None
+
+    def max_positions(self):
+        """Return the max speech and sentence length allowed by the task."""
+        return (self.args.max_source_positions, self.args.max_target_positions)
