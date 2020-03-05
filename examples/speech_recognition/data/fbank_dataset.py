@@ -94,19 +94,23 @@ class FilterBanksDataset(IndexedCachedDataset):
     """Loader for TorchNet dataset containing precomputed filterbanks"""
     _HDR_MAGIC = b'TNTIDX\x00\x00'
 
-    def __init__(self, path, cached=True):
+    def __init__(self, path, cached=True, legacy_audio_fix_lua_indexing=False):
         super().__init__(path)
         self.path = path
         self.cached = cached
+        self.legacy_audio_fix_lua_indexing = legacy_audio_fix_lua_indexing
         assert self.dtype == np.float32
         assert len(self.sizes) == len(self) * 2
 
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
         if self.cached:
-            return self.get_cached(i)
+            item = self.get_cached(i)
         else:
-            return self.get_from_disk(i)
+            item = self.get_from_disk(i)
+        if self.legacy_audio_fix_lua_indexing:
+            item = item - 1
+        return item
 
     def get_from_disk(self, i):
         if not self.data_file:

@@ -64,14 +64,15 @@ def get_asr_dataset_from_json(data_json_path, tgt_dict, skip_norm):
         return AsrDataset(aud_paths, frame_sizes, tgt, tgt_dict, ids, speakers, skip_normalization=skip_norm)
 
 
-def get_datasets_from_indexed_filterbanks(data_path, tgt_lang, tgt_dict, split, dataset_impl, skip_norm):
+def get_datasets_from_indexed_filterbanks(
+        data_path, tgt_lang, tgt_dict, split, dataset_impl, skip_norm, legacy_audio_fix_lua_indexing):
     """
     Creates a dataset reading precomputed filterbanks adn the corresponding target saved as indexed datasets.
     """
     assert tgt_lang is not None
     prefix = os.path.join(data_path, split)
 
-    src_dataset = FilterBanksDataset(prefix + ".npz", dataset_impl == "cached")
+    src_dataset = FilterBanksDataset(prefix + ".npz", dataset_impl == "cached", legacy_audio_fix_lua_indexing)
     tgt_dataset = data_utils.load_indexed_dataset(prefix + "." + tgt_lang, tgt_dict, dataset_impl)
     return FilterBankToTextDataset(src_dataset, tgt_dataset, tgt_dict, skip_normalization=skip_norm)
 
@@ -101,6 +102,8 @@ class SpeechRecognitionTask(FairseqTask):
                             help='target language')
         parser.add_argument('--skip-normalization', action='store_true', default=False,
                             help='if set, the input filterbanks are not normalized')
+        parser.add_argument('--legacy-audio-fix-lua-indexing', action='store_true', default=False,
+                            help='if set, the input filterbanks are subtracted 1 to remove +1 for lua indexing')
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
@@ -143,7 +146,8 @@ class SpeechRecognitionTask(FairseqTask):
                 self.tgt_dict,
                 split,
                 self.args.dataset_impl,
-                self.args.skip_normalization)
+                self.args.skip_normalization,
+                self.args.legacy_audio_fix_lua_indexing)
         self.datasets[split] = ds
 
     def build_generator(self, args):
