@@ -88,7 +88,7 @@ dtypes = {
     5: np.int64,
     6: np.float,
     7: np.double,
-    8: np.uint16
+    8: np.float32
 }
 
 
