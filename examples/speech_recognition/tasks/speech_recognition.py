@@ -13,6 +13,7 @@ from fairseq.tasks import FairseqTask, register_task
 from examples.speech_recognition.data import AsrDataset
 from examples.speech_recognition.data.replabels import replabel_symbol
 from examples.speech_recognition.modules.specaugment import SpecAugment
+from examples.speech_recognition.modules.time_stretch import TimeStretch
 
 
 def get_asr_dataset_from_json(data_json_path, tgt_dict, skip_norm):
@@ -116,6 +117,11 @@ class SpeechRecognitionTask(FairseqTask):
                             help="Number of masks to apply along the time dimension")
         parser.add_argument('--specaugment-rate', type=float, default=1.0,
                             help="Probability to apply specaugment to a spectrogram")
+        parser.add_argument('--time-stretch', action='store_true',
+                            help="If set, activates time stretch on spectrograms")
+        parser.add_argument('--time-stretch-w', type=int, default=1, help='Window size for time stretch')
+        parser.add_argument('--time-stretch-low', type=float, default=0.8, help='Low side of the stretch range')
+        parser.add_argument('--time-stretch-high', type=float, default=1.25, help='High side of the stretch range')
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
@@ -129,6 +135,11 @@ class SpeechRecognitionTask(FairseqTask):
                                            rate=args.specaugment_rate)
         else:
             self.specaugment = None
+        time_stretch = getattr(args, 'time_stretch', False)
+        if time_stretch:
+            self.time_stretch = TimeStretch(args.time_stretch_w, args.time_stretch_low, args.time_stretch_high)
+        else:
+            self.time_stretch = None
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -221,6 +232,8 @@ class SpeechRecognitionTask(FairseqTask):
                 - logging outputs to display while training
         """
         model.train()
+        if self.time_stretch is not None:
+            sample = self.time_stretch(sample)
         if self.specaugment is not None:
             sample = self.specaugment(sample)
         loss, sample_size, logging_output = criterion(model, sample)

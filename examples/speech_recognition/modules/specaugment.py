@@ -57,7 +57,7 @@ class SpecAugment(nn.Module):
         x = batch['net_input']['src_tokens']
         for spectrogram in x:
             if random.random() < self.rate:
-                sample = spec_augment(spectrogram, self.frequency_masking_pars,
+                sample = specaugment(spectrogram, self.frequency_masking_pars,
                                     self.time_masking_pars, self.frequency_masking_num, self.time_masking_num,
                                      )
             else:
