@@ -224,6 +224,10 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             mask = None
         return mask
 
+    @property
+    def output_batch_first(self):
+        return False
+
     def reorder_encoder_out(self, encoder_out, new_order):
         """
         Reorder encoder output according to *new_order*.
