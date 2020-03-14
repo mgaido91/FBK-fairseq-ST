@@ -33,7 +33,7 @@ class TranscriptionWrapperDataset(FairseqDataset):
         for i, s in enumerate(samples):
             transcriptions_map[s['id']] = i
             transcr_lens.append(s['encoder_target'].shape[0])
-        batch = self.tgt_dataset.s2s_collater.collate(samples)
+        batch = self.tgt_dataset.collater(samples)
         sort_order = []
         for s_id in batch['id'].tolist():
             sort_order.append(transcriptions_map[s_id])

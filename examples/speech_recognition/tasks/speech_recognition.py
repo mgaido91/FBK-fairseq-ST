@@ -4,16 +4,20 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
+import logging
 import os
 import re
 
 from examples.speech_recognition.data.fbank_dataset import FilterBanksDataset, FilterBankToTextDataset
-from fairseq.data import Dictionary, data_utils
+from fairseq.data import Dictionary, data_utils, ConcatDataset
 from fairseq.tasks import FairseqTask, register_task
 from examples.speech_recognition.data import AsrDataset
 from examples.speech_recognition.data.replabels import replabel_symbol
 from examples.speech_recognition.modules.specaugment import SpecAugment
 from examples.speech_recognition.modules.time_stretch import TimeStretch
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_asr_dataset_from_json(data_json_path, tgt_dict, skip_norm):
@@ -88,7 +92,8 @@ class SpeechRecognitionTask(FairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
-        parser.add_argument("data", help="path to data directory")
+        parser.add_argument("data", help="path to data directory. For multiple directories, "
+                                         "use column to concatenate them.")
         parser.add_argument(
             "--silence-token", default="\u2581", help="token for silence (used by w2l)"
         )
@@ -126,6 +131,7 @@ class SpeechRecognitionTask(FairseqTask):
     def __init__(self, args, tgt_dict):
         super().__init__(args)
         self.tgt_dict = tgt_dict
+        self.paths = args.data.split(os.pathsep)
         specaugment = getattr(args, 'specaugment', False)
         if specaugment:
             self.specaugment = SpecAugment(frequency_masking_pars=args.frequency_masking_pars,
@@ -148,7 +154,7 @@ class SpeechRecognitionTask(FairseqTask):
             dict_basename = "dict.txt"
         else:
             dict_basename = "dict.{}.txt".format(args.target_lang)
-        dict_path = os.path.join(args.data, dict_basename)
+        dict_path = os.path.join(args.data.split(os.pathsep)[0], dict_basename)
         if not os.path.isfile(dict_path):
             raise FileNotFoundError("Dict not found: {}".format(dict_path))
         tgt_dict = Dictionary.load(dict_path)
@@ -168,19 +174,29 @@ class SpeechRecognitionTask(FairseqTask):
         Args:
             split (str): name of the split (e.g., train, valid, test)
         """
-        if self.args.dataset_from_json:
-            data_json_path = os.path.join(self.args.data, "{}.json".format(split))
-            ds = get_asr_dataset_from_json(data_json_path, self.tgt_dict, self.args.skip_normalization)
+        datasets = []
+        for path in self.paths:
+            try:
+                if self.args.dataset_from_json:
+                    data_json_path = os.path.join(path, "{}.json".format(split))
+                    ds = get_asr_dataset_from_json(data_json_path, self.tgt_dict, self.args.skip_normalization)
+                else:
+                    ds = get_datasets_from_indexed_filterbanks(
+                        path,
+                        self.args.target_lang,
+                        self.tgt_dict,
+                        split,
+                        self.args.dataset_impl,
+                        self.args.skip_normalization,
+                        self.args.legacy_audio_fix_lua_indexing)
+                datasets.append(ds)
+            except Exception:
+                logger.warning("Split {} not found in {}. Skipping...".format(split, path))
+        assert len(datasets) > 0
+        if len(datasets) > 1:
+            self.datasets[split] = ConcatDataset(datasets)
         else:
-            ds = get_datasets_from_indexed_filterbanks(
-                self.args.data,
-                self.args.target_lang,
-                self.tgt_dict,
-                split,
-                self.args.dataset_impl,
-                self.args.skip_normalization,
-                self.args.legacy_audio_fix_lua_indexing)
-        self.datasets[split] = ds
+            self.datasets[split] = datasets[0]
 
     def build_generator(self, args):
         w2l_decoder = getattr(args, "w2l_decoder", None)

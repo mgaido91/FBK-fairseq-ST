@@ -2,13 +2,16 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import logging
 import os
 
 from examples.speech_recognition.data.transcription_dataset import TranscriptionWrapperDataset
 from examples.speech_recognition.tasks.speech_recognition import SpeechRecognitionTask
-from fairseq.data import Dictionary, data_utils
+from fairseq.data import Dictionary, data_utils, ConcatDataset
 from fairseq.tasks import register_task
+
+
+logger = logging.getLogger(__name__)
 
 
 @register_task("speech_translation_with_transcription")
@@ -33,7 +36,7 @@ class SpeechTranslationCTCTask(SpeechRecognitionTask):
     def setup_task(cls, args, **kwargs):
         """Setup the task (e.g., load dictionaries)."""
         task = super(SpeechTranslationCTCTask, cls).setup_task(args)
-        source_dict_path = os.path.join(args.data, "dict.{}.txt".format(args.source_lang))
+        source_dict_path = os.path.join(args.data.split(os.pathsep)[0], "dict.{}.txt".format(args.source_lang))
         if not os.path.isfile(source_dict_path):
             raise FileNotFoundError("Dict not found: {}".format(source_dict_path))
         src_dict = Dictionary.load(source_dict_path)
@@ -54,10 +57,20 @@ class SpeechTranslationCTCTask(SpeechRecognitionTask):
             raise NotImplementedError
         else:
             super().load_dataset(split, combine=combine, **kwargs)
-            transcr_dataset = data_utils.load_indexed_dataset(
-                os.path.join(self.args.data, split) + "." + self.args.source_lang,
-                self.src_dict,
-                self.args.dataset_impl)
+            transcr_datasets = []
+            for path in self.paths:
+                ds = data_utils.load_indexed_dataset(
+                    os.path.join(path, split) + "." + self.args.source_lang,
+                    self.src_dict,
+                    self.args.dataset_impl)
+                if ds is not None:
+                    transcr_datasets.append(ds)
+            assert len(transcr_datasets) > 0
+            if len(transcr_datasets) > 1:
+                transcr_dataset = ConcatDataset(transcr_datasets)
+            else:
+                transcr_dataset = transcr_datasets[0]
+        assert len(self.datasets[split]) == len(transcr_dataset)
         self.datasets[split] = TranscriptionWrapperDataset(self.datasets[split], transcr_dataset, self.src_dict)
 
     @property

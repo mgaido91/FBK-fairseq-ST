@@ -71,6 +71,10 @@ class FilterBankToTextDataset(FairseqDataset):
             self.tgt_dataset.size(index) if self.tgt_dataset is not None else 0,
         )
 
+    @property
+    def sizes(self):
+        return self.tgt_dataset.sizes
+
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based
         on this order."""
