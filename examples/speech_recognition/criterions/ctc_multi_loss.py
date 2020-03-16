@@ -32,10 +32,12 @@ class CTCEncoderWrapperModel(BaseFairseqModel):
             encoder_padding_mask = encoder_out.encoder_padding_mask
         else:
             raise NotImplementedError("Encoder output not supported by CTC multi loss")
+        if encoder_padding_mask is not None:
+            encoder_padding_mask = encoder_padding_mask.t()  # B x T => T x B
         ctc_features = encoder_states[self.ctc_encoder_layer - 1]
         return decoder_out, {
             "encoder_out": self.fc_out(ctc_features),
-            "encoder_padding_mask": encoder_padding_mask.t()  # B x T => T x B
+            "encoder_padding_mask": encoder_padding_mask
         }
 
 
