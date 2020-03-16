@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from examples.speech_recognition.criterions.CTC_loss import CTCCriterion
 from fairseq import utils, metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
-from fairseq.criterions.label_smoothed_cross_entropy import LabelSmoothedCrossEntropyCriterion
 from fairseq.models import BaseFairseqModel
 
 
@@ -156,6 +155,10 @@ class CTCMultiLoss(FairseqCriterion):
         if 'nll_loss' in real_logging_output:
             logging_output['nll_loss'] = real_logging_output['nll_loss']
         return loss, ctc_sample_size, logging_output
+
+    @staticmethod
+    def logging_outputs_can_be_summed():
+        return True
 
     @staticmethod
     def reduce_metrics(logging_outputs):
