@@ -120,7 +120,6 @@ class CTCMultiLoss(FairseqCriterion):
     @staticmethod
     def add_args(parser):
         CTCCriterion.add_args(parser)
-        LabelSmoothedCrossEntropyCriterion.add_args(parser)
         parser.add_argument('--ctc-encoder-layer', default=6, type=int, metavar='LAYER_NUM',
                             help='The encoder layer whose feature are used to compute the CTC loss')
         parser.add_argument('--ctc-weight', default=1.0, type=float, metavar='W',

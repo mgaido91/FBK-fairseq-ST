@@ -417,6 +417,9 @@ def add_checkpoint_args(parser):
                        help='if set, does not reload dataloader state from the checkpoint')
     group.add_argument('--reset-lr-scheduler', action='store_true',
                        help='if set, does not load lr scheduler state from the checkpoint')
+    group.add_argument('--allow-partial-restore', action='store_true',
+                       help="if set, the model is restored even if it doesn't match exactly"
+                            "the architecture, ie. some params are missing.")
     group.add_argument('--reset-meters', action='store_true',
                        help='if set, does not load meters from the checkpoint')
     group.add_argument('--reset-optimizer', action='store_true',

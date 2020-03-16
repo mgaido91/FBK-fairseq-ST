@@ -131,6 +131,7 @@ def load_checkpoint(args, trainer, **passthrough_args):
         args.reset_lr_scheduler,
         eval(args.optimizer_overrides),
         reset_meters=args.reset_meters,
+        allow_non_strict_loading=args.allow_partial_restore
     )
 
     if (
