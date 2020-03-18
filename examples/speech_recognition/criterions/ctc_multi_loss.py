@@ -1,4 +1,3 @@
-import logging
 import math
 
 import torch
@@ -10,9 +9,6 @@ from examples.speech_recognition.criterions.CTC_loss import CTCCriterion
 from fairseq import utils, metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.models import BaseFairseqModel
-
-
-logger = logging.getLogger(__name__)
 
 
 class CTCEncoderWrapperModel(BaseFairseqModel):
@@ -133,17 +129,6 @@ class CTCMultiLoss(FairseqCriterion):
                             help='underlying criterion to use for the model output loss')
 
     def forward(self, model, sample, reduce=True, log_probs=True):
-        valid_inputs = sample["net_input"]['src_lengths'] > 1
-        if not valid_inputs.all():
-            logger.warning(
-                "Skipping invalid inputs for batch: {}.\nInput lengths: {}.\nTarget for the loss: {}.".format(
-                    sample['id'], sample["net_input"]['src_lengths'], sample['encoder_target']))
-            for k in sample["net_input"]:
-                sample["net_input"][k] = sample["net_input"][k][valid_inputs]
-            sample["encoder_target"] = sample["encoder_target"][valid_inputs]
-            sample["encoder_target_lengths"] = sample["encoder_target_lengths"][valid_inputs]
-            sample["target"] = sample["target"][valid_inputs]
-
         decoder_out, encoder_out = self.ctc_aware_model(model, **sample["net_input"])
         encoder_fake_model = FakeEncoderModel(model.encoder, encoder_out, sample["encoder_target"])
         decoder_fake_model = FakeDecoderModel(model, decoder_out, sample["target"])
@@ -151,7 +136,7 @@ class CTCMultiLoss(FairseqCriterion):
             "net_input": sample["net_input"],
             "target": sample["encoder_target"],
             "target_lengths": sample["encoder_target_lengths"],
-            "ntokens": sum(sample["encoder_target_lengths"]).item()
+            "ntokens": sample["ntokens"]
         }
         ctc_loss, ctc_sample_size, ctc_logging_output = self.ctc_criterion(
             encoder_fake_model, encoder_sample, reduce=reduce, log_probs=log_probs)
