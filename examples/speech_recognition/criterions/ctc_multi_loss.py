@@ -136,7 +136,7 @@ class CTCMultiLoss(FairseqCriterion):
             "net_input": sample["net_input"],
             "target": sample["encoder_target"],
             "target_lengths": sample["encoder_target_lengths"],
-            "ntokens": sample["ntokens"]
+            "ntokens": sum(sample["encoder_target_lengths"]).item()
         }
         ctc_loss, ctc_sample_size, ctc_logging_output = self.ctc_criterion(
             encoder_fake_model, encoder_sample, reduce=reduce, log_probs=log_probs)
