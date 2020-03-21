@@ -338,7 +338,7 @@ def base_architecture(args):
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big')
-def speechtransformer_fbk(args):
+def speechtransformer_big(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
@@ -377,7 +377,7 @@ def speechtransformer_fbk(args):
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big2')
-def speechtransformer_fbk(args):
+def speechtransformer_big2(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
@@ -416,7 +416,7 @@ def speechtransformer_fbk(args):
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_giant')
-def speechtransformer_fbk(args):
+def speechtransformer_giant(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
