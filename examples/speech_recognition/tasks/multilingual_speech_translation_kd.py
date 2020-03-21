@@ -5,6 +5,7 @@
 
 import logging
 import os
+from collections import OrderedDict
 
 import numpy as np
 
@@ -12,7 +13,7 @@ from examples.speech_recognition.data.transcription_dataset import Transcription
 from examples.speech_recognition.tasks.multilingual_speech_translation import \
     MultilingualSpeechTranslationWithTranscriptionTask
 from examples.speech_recognition.tasks.speech_recognition import get_datasets_from_indexed_filterbanks
-from fairseq.data import data_utils, ConcatDataset, IndexedDataset
+from fairseq.data import data_utils, ConcatDataset, IndexedDataset, RoundRobinZipDatasets
 from fairseq.data.knowledge_distillation import TeacherOutputDataset, DatasetWithTeacherOutput
 from fairseq.tasks import register_task
 
@@ -114,3 +115,16 @@ class MultilingualSpeechTranslationWithTranscriptionKDTask(MultilingualSpeechTra
             src_lang=src,
             tgt_eos=self.dicts[tgt].eos(),
             tgt_lang=tgt)
+
+    def load_dataset(self, split, epoch=0, **kwargs):
+        """Load a dataset split."""
+        if self.args.dataset_from_json:
+            raise NotImplementedError
+        else:
+            self.datasets[split] = RoundRobinZipDatasets(
+                OrderedDict([
+                    (lang_pair, self.__load_dataset(split, lang_pair))
+                    for lang_pair in self.lang_pairs
+                ]),
+                eval_key=None if self.training else "%s-%s" % (self.args.source_lang, self.args.target_lang),
+            )
