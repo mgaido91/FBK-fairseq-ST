@@ -122,6 +122,15 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
         parser.add_argument('--share-decoders', action='store_true',
                             help='share decoders across languages')
 
+    def forward(self, src_tokens, src_lengths, prev_output_tokens, langtok, **kwargs):
+        decoder_outs = {}
+        for key in self.keys:
+            encoder_out = self.models[key].encoder(src_tokens, src_lengths, langtok, **kwargs)
+            decoder_outs[key] = self.models[key].decoder(
+                prev_output_tokens, encoder_out, **kwargs
+            )
+        return decoder_outs
+
 
 class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
     """
