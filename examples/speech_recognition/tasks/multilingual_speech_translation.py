@@ -134,8 +134,8 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
                     os.path.join(path, split))
                 transcr_datasets.append(transcr_ds)
                 datasets.append(ds)
-            except Exception:
-                logger.warning("Split {} not found in {}. Skipping...".format(split, path))
+            except Exception as e:
+                logger.warning("Split {} not found in {}. Due to: {}. Skipping...".format(split, path, e))
         assert len(datasets) > 0
         assert len(datasets) == len(transcr_datasets)
         if len(datasets) > 1:
