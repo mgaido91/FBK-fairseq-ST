@@ -64,26 +64,16 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
 
         # build shared embeddings (if applicable)
         shared_decoder_embed_tokens = None
-        if args.share_all_embeddings:
-            shared_decoder_embed_tokens = FairseqMultiModel.build_shared_embeddings(
-                dicts=task.dicts,
-                langs=task.langs,
-                embed_dim=args.encoder_embed_dim,
-                build_embedding=build_embedding,
-                pretrained_embed_path=args.encoder_embed_path,
-            )
-            args.share_decoder_input_output_embed = True
-        else:
-            if args.share_decoder_embeddings:
-                shared_decoder_embed_tokens = (
-                    FairseqMultiModel.build_shared_embeddings(
-                        dicts=task.dicts,
-                        langs=tgt_langs,
-                        embed_dim=args.decoder_embed_dim,
-                        build_embedding=build_embedding,
-                        pretrained_embed_path=args.decoder_embed_path,
-                    )
+        if args.share_decoder_embeddings:
+            shared_decoder_embed_tokens = (
+                FairseqMultiModel.build_shared_embeddings(
+                    dicts=task.dicts,
+                    langs=tgt_langs,
+                    embed_dim=args.decoder_embed_dim,
+                    build_embedding=build_embedding,
+                    pretrained_embed_path=args.decoder_embed_path,
                 )
+            )
 
         # encoders/decoders for each language
         lang_encoders, lang_decoders = {}, {}
