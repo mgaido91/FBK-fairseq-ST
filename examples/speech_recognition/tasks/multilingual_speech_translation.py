@@ -168,7 +168,7 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
         raise NotImplementedError
 
     def build_model(self, args):
-        assert self.args.langtok_merge_strategy != args.langtok_merge_strategy, \
+        assert self.args.langtok_merge_strategy == args.langtok_merge_strategy, \
             '--langtok-merge-strategy should be {}.'.format(args.langtok_merge_strategy)
         return super().build_model(args)
 
