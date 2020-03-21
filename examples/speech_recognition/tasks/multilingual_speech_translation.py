@@ -9,6 +9,8 @@ import os
 
 from examples.speech_recognition.data.langtok_fbank_dataset import LangtokFilterBanksToTextDataset
 from examples.speech_recognition.data.transcription_dataset import TranscriptionWrapperDataset
+from examples.speech_recognition.modules.specaugment import SpecAugment
+from examples.speech_recognition.modules.time_stretch import TimeStretch
 from examples.speech_recognition.tasks.speech_recognition import get_datasets_from_indexed_filterbanks
 from fairseq.data import (
     RoundRobinZipDatasets,
@@ -87,6 +89,20 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
         if self.args.langtok_merge_strategy == 'sum' and self.args.decoder_langtok:
             raise ValueError('Merge strategy \'sum\' is not valid for decoder language token.')
         self.paths = args.data.split(os.pathsep)
+        specaugment = getattr(args, 'specaugment', False)
+        if specaugment:
+            self.specaugment = SpecAugment(frequency_masking_pars=args.frequency_masking_pars,
+                                           time_masking_pars=args.time_masking_pars,
+                                           frequency_masking_num=args.frequency_masking_num,
+                                           time_masking_num=args.time_masking_num,
+                                           rate=args.specaugment_rate)
+        else:
+            self.specaugment = None
+        time_stretch = getattr(args, 'time_stretch', False)
+        if time_stretch:
+            self.time_stretch = TimeStretch(args.time_stretch_w, args.time_stretch_low, args.time_stretch_high)
+        else:
+            self.time_stretch = None
 
     def alter_dataset_langtok(
             self, ds, src_eos=None, src_lang=None, tgt_eos=None, tgt_lang=None):
