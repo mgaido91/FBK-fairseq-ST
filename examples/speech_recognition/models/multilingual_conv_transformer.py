@@ -92,7 +92,7 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
                     decoder_embed_tokens = build_embedding(
                         task.dicts[lang], args.decoder_embed_dim, args.decoder_embed_path
                     )
-                lang_decoders[lang] = TransformerDecoder(args, task.dicts[lang], decoder_embed_tokens)
+                lang_decoders[lang] = TokenWiseTransformerDecoder(args, task.dicts[lang], decoder_embed_tokens)
             return lang_decoders[lang]
 
         # shared encoders/decoders (if applicable)
@@ -121,15 +121,6 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
                             help='share encoders across languages')
         parser.add_argument('--share-decoders', action='store_true',
                             help='share decoders across languages')
-
-    def forward(self, src_tokens, src_lengths, prev_output_tokens, langtok, **kwargs):
-        decoder_outs = {}
-        for key in self.keys:
-            encoder_out = self.models[key].encoder(src_tokens, src_lengths, langtok, **kwargs)
-            decoder_outs[key] = self.models[key].decoder(
-                prev_output_tokens, encoder_out, **kwargs
-            )
-        return decoder_outs
 
 
 class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
@@ -170,6 +161,30 @@ class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
                 src_tokens = torch.cat([embeddings, src_tokens], dim=1)
                 src_lengths = src_lengths + 1
         return super().forward(src_tokens, src_lengths, cls_input, return_all_hiddens)
+
+
+class TokenWiseTransformerDecoder(TransformerDecoder):
+    def forward(
+        self,
+        prev_output_tokens,
+        encoder_out = None,
+        incremental_state = None,
+        features_only = False,
+        alignment_layer = None,
+        alignment_heads = None,
+        src_lengths = None,
+        return_all_hiddens = False,
+        langtok = None,
+    ):
+        return super().forward(
+            prev_output_tokens,
+            encoder_out=encoder_out,
+            incremental_state=incremental_state,
+            features_only=features_only,
+            alignment_layer=alignment_layer,
+            alignment_heads=alignment_heads,
+            src_lengths=src_lengths,
+            return_all_hiddens=return_all_hiddens)
 
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):
