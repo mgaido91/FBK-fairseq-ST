@@ -3,7 +3,7 @@ from fairseq.data import FairseqDataset
 
 class LangtokFilterBanksToTextDataset(FairseqDataset):
     def __init__(self, wrapped_ds, lang_for_token=None, tgt_bos=None, tgt_langtok=None):
-        super(LangtokFilterBanksToTextDataset, self).__init__(self)
+        super().__init__()
         self.wrapped_ds = wrapped_ds
         self.lang_for_token = lang_for_token
         self.tgt_bos = tgt_bos
