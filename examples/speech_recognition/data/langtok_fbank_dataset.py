@@ -24,7 +24,7 @@ class LangtokFilterBanksToTextDataset(FairseqDataset):
         Returns:
             dict: a mini-batch suitable for forwarding with a Model
         """
-        batch = self.tgt_dataset.collater(samples)
+        batch = self.wrapped_ds.collater(samples)
         # In case of an empty batch, return an empty dict
         if len(batch) == 0:
             return {}
