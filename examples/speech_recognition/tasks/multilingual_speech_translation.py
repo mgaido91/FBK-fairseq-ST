@@ -52,6 +52,10 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
         # fmt: off
         MultilingualTranslationTask.add_args(parser)
         # Speech related args:
+        parser.add_argument(
+            "--dataset-from-json", default=False,
+            help="whether to read the data from a JSON file or from indexed data containing "
+                 "the precomputed filterbanks")
         parser.add_argument('--skip-normalization', action='store_true', default=False,
                             help='if set, the input filterbanks are not normalized')
         parser.add_argument('--legacy-audio-fix-lua-indexing', action='store_true', default=False,
