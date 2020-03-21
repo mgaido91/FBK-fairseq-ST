@@ -153,7 +153,7 @@ class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
             device = src_tokens.device
             embed = self.lang_embeddings(torch.tensor(self.langs.index(langtok)).to(device))
             if self.langtok_merge_strategy == 'sum':
-                padding_mask = lengths_to_encoder_padding_mask(src_lengths, batch_first=True)
+                padding_mask = lengths_to_encoder_padding_mask(src_lengths, batch_first=True)[0]
                 embeddings = padding_mask.logical_not().unsqueeze(-1).float() * embed
                 src_tokens = src_tokens + embeddings
             else:
