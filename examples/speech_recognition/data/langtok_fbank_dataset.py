@@ -30,9 +30,9 @@ class LangtokFilterBanksToTextDataset(FairseqDataset):
             return {}
         batch['net_input']['langtok'] = self.lang_for_token
 
-        if self.tgt_langtok is not None and 'prev_output_tokens' in samples['net_input']:
-            assert (samples['net_input']['prev_output_tokens'][:, 0] != self.tgt_bos).sum() == 0
-            samples['net_input']['prev_output_tokens'][:, 0] = self.tgt_langtok
+        if self.tgt_langtok is not None and 'prev_output_tokens' in batch['net_input']:
+            assert (batch['net_input']['prev_output_tokens'][:, 0] != self.tgt_bos).sum() == 0
+            batch['net_input']['prev_output_tokens'][:, 0] = self.tgt_langtok
         return batch
 
     def num_tokens(self, index):
