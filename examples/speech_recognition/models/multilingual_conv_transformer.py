@@ -16,7 +16,7 @@ from torch import nn
 from examples.speech_recognition.data.data_utils import lengths_to_encoder_padding_mask
 from examples.speech_recognition.models.conv_transformer import ConvolutionalTransformerModel, \
     ConvolutionalTransformerEncoder, base_architecture, speechtransformer_big2, speechtransformer_big
-from fairseq import utils
+from fairseq import utils, checkpoint_utils
 from fairseq.models import register_model, register_model_architecture, FairseqMultiModel
 from fairseq.models.transformer import TransformerDecoder
 
@@ -82,6 +82,9 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
             if src_lang not in lang_encoders:
                 lang_encoders[src_lang] = TokenWiseConvolutionalTransformerEncoder(
                     args, task.dicts[tgt_lang], audio_features=args.input_feat_per_channel, langs=task.langs)
+                if args.pretrained_encoder is not None:
+                    checkpoint_utils.load_pretrained_component_from_model(
+                        lang_encoders[src_lang], args.pretrained_encoder, args.allow_partial_restore)
             return lang_encoders[src_lang]
 
         def get_decoder(lang):
@@ -113,6 +116,8 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
     def add_args(parser):
         """Add model-specific arguments to the parser."""
         ConvolutionalTransformerModel.add_args(parser)
+        parser.add_argument('--pretrained-encoder', type=str, default=None,
+                            help='path to a pretrained encoder')
         parser.add_argument('--share-encoder-embeddings', action='store_true',
                             help='share encoder embeddings across languages')
         parser.add_argument('--share-decoder-embeddings', action='store_true',

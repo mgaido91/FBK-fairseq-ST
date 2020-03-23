@@ -448,7 +448,7 @@ def prune_state_dict(state_dict, args):
 
 
 def load_pretrained_component_from_model(
-    component: Union[FairseqEncoder, FairseqDecoder], checkpoint: str
+    component: Union[FairseqEncoder, FairseqDecoder], checkpoint: str, allow_non_strict: bool
 ):
     """
     Load a pretrained FairseqEncoder or FairseqDecoder from checkpoint into the
@@ -474,7 +474,14 @@ def load_pretrained_component_from_model(
             # encoder.input_layers.0.0.weight --> input_layers.0.0.weight
             component_subkey = key[len(component_type) + 1 :]
             component_state_dict[component_subkey] = state["model"][key]
-    component.load_state_dict(component_state_dict, strict=True)
+    incompatible_keys = component.load_state_dict(component_state_dict, strict=(not allow_non_strict))
+    if len(incompatible_keys.unexpected_keys) != 0:
+        logger.error("Cannot load the following keys from checkpoint: {}".format(
+            incompatible_keys.unexpected_keys))
+        raise ValueError("Cannot load from checkpoint: {}".format(checkpoint))
+    if len(incompatible_keys.missing_keys) > 0:
+        logger.info("Loaded checkpoint misses the parameters: {}".format(
+            incompatible_keys.missing_keys))
     return component
 
 
