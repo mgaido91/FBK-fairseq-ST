@@ -169,6 +169,11 @@ class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
 
 
 class TokenWiseTransformerDecoder(TransformerDecoder):
+    def __init__(self, args, dictionary,  embed_tokens, no_encoder_attn=False):
+        if args.langtok_merge_strategy == 'sum':
+            embed_tokens = EmbeddingsWithTokenSum(embed_tokens, dictionary.eos())
+        super().__init__(args, dictionary, embed_tokens, no_encoder_attn=no_encoder_attn)
+
     def forward(
         self,
         prev_output_tokens,
@@ -197,6 +202,23 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
     nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
+
+
+class EmbeddingsWithTokenSum(nn.Module):
+    def __init__(self, base_embeddings, bos_idx):
+        super().__init__()
+        self.base_embeddings = base_embeddings
+        self.bos_idx = bos_idx
+        self.embedding_dim = base_embeddings.embedding_dim
+        self.padding_idx = base_embeddings.padding_idx
+
+    def forward(self, tokens):
+        embeddings = self.base_embeddings(tokens)
+        # The first token in the lang token
+        lang_embed = embeddings[0][0]
+        device = tokens.device
+        embeddings[:, 0] = self.base_embeddings(torch.tensor(self.bos_idx).to(device))
+        return embeddings + lang_embed
 
 
 @register_model_architecture('multilingual_conv_transformer', 'multilingual_conv_transformer')

@@ -88,8 +88,6 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
 
     def __init__(self, args, dicts, training):
         super().__init__(args, dicts, training)
-        if self.args.langtok_merge_strategy == 'sum' and self.args.decoder_langtok:
-            raise ValueError('Merge strategy \'sum\' is not valid for decoder language token.')
         self.paths = args.data.split(os.pathsep)
         specaugment = getattr(args, 'specaugment', False)
         if specaugment:
