@@ -22,8 +22,8 @@ from fairseq.tasks.multilingual_translation import MultilingualTranslationTask
 logger = logging.getLogger(__name__)
 
 
-@register_task('multilingual_speech_translation_with_transcr')
-class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslationTask):
+@register_task('multilingual_speech_translation')
+class MultilingualSpeechTranslationTask(MultilingualTranslationTask):
     """A task for training multiple translation models simultaneously.
 
     We iterate round-robin over batches from multiple language pairs, ordered
@@ -105,6 +105,10 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
         else:
             self.time_stretch = None
 
+    @property
+    def source_dictionary(self):
+        return None
+
     def alter_dataset_langtok(
             self, ds, src_eos=None, src_lang=None, tgt_eos=None, tgt_lang=None):
         if self.args.encoder_langtok is None and not self.args.decoder_langtok:
@@ -128,6 +132,86 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
             lang_for_token=encoder_lang_for_token,
             tgt_bos=tgt_eos,
             tgt_langtok=tgt_langtok)
+
+    def __load_dataset(self, split, lang_pair):
+        src, tgt = lang_pair.split('-')
+        datasets = []
+        for path in self.paths:
+            try:
+                ds = get_datasets_from_indexed_filterbanks(
+                    path,
+                    tgt,
+                    self.dicts[tgt],
+                    split,
+                    self.args.dataset_impl,
+                    self.args.skip_normalization,
+                    self.args.legacy_audio_fix_lua_indexing)
+                datasets.append(ds)
+            except Exception:
+                logger.warning("Split {} not found in {}. Skipping...".format(split, path))
+        assert len(datasets) > 0
+        if len(datasets) > 1:
+            dataset = ConcatDataset(datasets)
+        else:
+            dataset = datasets[0]
+        return self.alter_dataset_langtok(
+            dataset,
+            src_eos=None,
+            src_lang=src,
+            tgt_eos=self.dicts[tgt].eos(),
+            tgt_lang=tgt)
+
+    def load_dataset(self, split, epoch=0, **kwargs):
+        """Load a dataset split."""
+        if self.args.dataset_from_json:
+            raise NotImplementedError
+        else:
+            self.datasets[split] = RoundRobinZipDatasets(
+                OrderedDict([
+                    (lang_pair, self.__load_dataset(split, lang_pair))
+                    for lang_pair in self.lang_pairs
+                ]),
+                eval_key=None if self.training else "%s-%s" % (self.args.source_lang, self.args.target_lang),
+            )
+
+    def build_dataset_for_inference(self, src_tokens, src_lengths):
+        raise NotImplementedError
+
+    def build_model(self, args):
+        assert self.args.langtok_merge_strategy == args.langtok_merge_strategy, \
+            '--langtok-merge-strategy should be {}.'.format(args.langtok_merge_strategy)
+        return super().build_model(args)
+
+    def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
+        model.train()
+        from collections import defaultdict
+        agg_loss, agg_sample_size, agg_logging_output = 0., 0., defaultdict(float)
+        for lang_pair in self.model_lang_pairs:
+            if sample[lang_pair] is None or len(sample[lang_pair]) == 0:
+                continue
+            current_sample = sample[lang_pair]
+            if self.time_stretch is not None:
+                current_sample = self.time_stretch(current_sample)
+            if self.specaugment is not None:
+                current_sample = self.specaugment(current_sample)
+
+            loss, sample_size, logging_output = criterion(model.models[lang_pair], current_sample)
+            if ignore_grad:
+                loss *= 0
+            optimizer.backward(loss)
+            agg_loss += loss.detach().item()
+            # TODO make summing of the sample sizes configurable
+            agg_sample_size += sample_size
+            for k in logging_output:
+                agg_logging_output[k] += logging_output[k]
+                agg_logging_output[f"{lang_pair}:{k}"] += logging_output[k]
+        return agg_loss, agg_sample_size, agg_logging_output
+
+
+@register_task('multilingual_speech_translation_with_transcr')
+class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualSpeechTranslationTask):
+    def __init__(self, args, dicts, training):
+        super().__init__(args, dicts, training)
 
     def __load_dataset(self, split, lang_pair):
         src, tgt = lang_pair.split('-')
@@ -181,35 +265,9 @@ class MultilingualSpeechTranslationWithTranscriptionTask(MultilingualTranslation
                 eval_key=None if self.training else "%s-%s" % (self.args.source_lang, self.args.target_lang),
             )
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths):
-        raise NotImplementedError
-
-    def build_model(self, args):
-        assert self.args.langtok_merge_strategy == args.langtok_merge_strategy, \
-            '--langtok-merge-strategy should be {}.'.format(args.langtok_merge_strategy)
-        return super().build_model(args)
-
-    def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
-        model.train()
-        from collections import defaultdict
-        agg_loss, agg_sample_size, agg_logging_output = 0., 0., defaultdict(float)
-        for lang_pair in self.model_lang_pairs:
-            if sample[lang_pair] is None or len(sample[lang_pair]) == 0:
-                continue
-            current_sample = sample[lang_pair]
-            if self.time_stretch is not None:
-                current_sample = self.time_stretch(current_sample)
-            if self.specaugment is not None:
-                current_sample = self.specaugment(current_sample)
-
-            loss, sample_size, logging_output = criterion(model.models[lang_pair], current_sample)
-            if ignore_grad:
-                loss *= 0
-            optimizer.backward(loss)
-            agg_loss += loss.detach().item()
-            # TODO make summing of the sample sizes configurable
-            agg_sample_size += sample_size
-            for k in logging_output:
-                agg_logging_output[k] += logging_output[k]
-                agg_logging_output[f"{lang_pair}:{k}"] += logging_output[k]
-        return agg_loss, agg_sample_size, agg_logging_output
+    @property
+    def source_dictionary(self):
+        if self.training:
+            return next(iter(self.dicts.values()))
+        else:
+            return self.dicts[self.args.source_lang]
