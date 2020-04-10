@@ -19,6 +19,7 @@ from examples.speech_recognition.models.conv_transformer import ConvolutionalTra
 from fairseq import utils, checkpoint_utils
 from fairseq.models import register_model, register_model_architecture, FairseqMultiModel
 from fairseq.models.transformer import TransformerDecoder
+from fairseq.tasks.multilingual_translation import _lang_token_index
 
 
 @register_model('multilingual_conv_transformer')
@@ -95,7 +96,8 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
                     decoder_embed_tokens = build_embedding(
                         task.dicts[lang], args.decoder_embed_dim, args.decoder_embed_path
                     )
-                lang_decoders[lang] = TokenWiseTransformerDecoder(args, task.dicts[lang], decoder_embed_tokens)
+                lang_decoders[lang] = TokenWiseTransformerDecoder(
+                    args, task.dicts[lang], decoder_embed_tokens, task.args.target_lang)
             return lang_decoders[lang]
 
         # shared encoders/decoders (if applicable)
@@ -178,9 +180,13 @@ class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
 
 
 class TokenWiseTransformerDecoder(TransformerDecoder):
-    def __init__(self, args, dictionary,  embed_tokens, no_encoder_attn=False):
+    def __init__(self, args, dictionary,  embed_tokens, target_lang, no_encoder_attn=False):
         if args.langtok_merge_strategy == 'sum':
-            embed_tokens = EmbeddingsWithTokenSum(embed_tokens, dictionary.eos())
+            if target_lang is not None:
+                target_lang_idx = _lang_token_index(dictionary, target_lang)
+            else:
+                target_lang_idx = None
+            embed_tokens = EmbeddingsWithTokenSum(embed_tokens, dictionary.eos(), lang_token_index=target_lang_idx)
         super().__init__(args, dictionary, embed_tokens, no_encoder_attn=no_encoder_attn)
 
     def forward(
@@ -214,20 +220,30 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
 
 
 class EmbeddingsWithTokenSum(nn.Module):
-    def __init__(self, base_embeddings, bos_idx):
+    def __init__(self, base_embeddings, bos_idx, lang_token_index=None):
         super().__init__()
         self.base_embeddings = base_embeddings
         self.bos_idx = bos_idx
         self.embedding_dim = base_embeddings.embedding_dim
         self.padding_idx = base_embeddings.padding_idx
+        self.lang_token_index = lang_token_index
 
     def forward(self, tokens):
-        embeddings = self.base_embeddings(tokens)
-        # The first token in the lang token
-        lang_embed = embeddings[0][0]
         device = tokens.device
-        embeddings[:, 0] = self.base_embeddings(torch.tensor(self.bos_idx).to(device))
-        return embeddings + lang_embed
+        if self.lang_token_index is None:
+            # Training phase
+            embeddings = self.base_embeddings(tokens)
+            # The first token is the lang token
+            lang_embed = embeddings[0][0]
+            embeddings[:, 0] = self.base_embeddings(torch.tensor(self.bos_idx).to(device))
+            return embeddings + lang_embed
+        else:
+            # Generation phase
+            bos = tokens.eq(self.lang_token_index)
+            tokens[bos] = self.bos_idx
+            embeddings = self.base_embeddings(tokens)
+            return embeddings + self.base_embeddings(torch.tensor(self.lang_token_index).to(device))
+
 
 
 @register_model_architecture('multilingual_conv_transformer', 'multilingual_conv_transformer')
