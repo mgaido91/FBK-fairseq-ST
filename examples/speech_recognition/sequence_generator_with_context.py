@@ -1,16 +1,15 @@
 import math
 
 import torch
+import torch.nn.functional as F
 
 from examples.speech_recognition.models.context_model import FairseqContextModel
 from fairseq.sequence_generator import SequenceGenerator, EnsembleModel
 
 
-class TargetContextAwareSequenceGenerator(SequenceGenerator):
+class ContextAwareSequenceGenerator(SequenceGenerator):
     """
-    Generates translations of a given source sentence.
-    This class provides the output generated for the previous sentence as
-    context for the next one.
+    Generates translations of a given source sentence with a context.
 
     Args:
         tgt_dict (~fairseq.data.Dictionary): target dictionary
@@ -64,7 +63,8 @@ class TargetContextAwareSequenceGenerator(SequenceGenerator):
             no_repeat_ngram_size=no_repeat_ngram_size,
             search_strategy=search_strategy,
         )
-        self.context = torch.LongTensor([[tgt_dict.eos()]])
+        self.buffer = self.default_buffer
+        self.context = None
 
     @torch.no_grad()
     def generate(self, models, sample, **kwargs):
@@ -80,14 +80,80 @@ class TargetContextAwareSequenceGenerator(SequenceGenerator):
         """
         model = ContextAwareEnsembleModel(models)
         src_tokens = sample['net_input']['src_tokens']
-        assert src_tokens.size(0) == 1, "Generation with context supports only batch size 1."
+        self.context = self.next_batch_context(src_tokens, self.buffer)
+        assert src_tokens.size(0) == self.context.size(0),\
+            "Batch size ({}) is different from context batch size ({}).".format(
+                src_tokens.size(0), self.context.size(0))
         self.context = self.context.to(src_tokens.device)
         context_lengths = torch.LongTensor([self.context.size(1)]).to(src_tokens.device)
         model.forward_context(self.context, context_lengths)
         hypos = self._generate(model, sample, **kwargs)
-        # We take the most likely sentence from previous generation as context for the next
-        self.context = hypos[0][0]['tokens'].unsqueeze(0)
+        self.buffer = self.new_prev_buffer(src_tokens, hypos)
         return hypos
+
+    @property
+    def default_buffer(self):
+        raise NotImplementedError
+
+    def next_batch_context(self, src_tokens, buffer):
+        raise NotImplementedError
+
+    def new_prev_buffer(self, src_tokens, hypos):
+        raise NotImplementedError
+
+
+class TargetContextAwareSequenceGenerator(ContextAwareSequenceGenerator):
+    """
+    Generates translations of a given source sentence.
+    This class provides the output generated for the previous sentence as
+    context for the next one.
+    """
+
+    @property
+    def default_buffer(self):
+        return torch.LongTensor([[self.eos]])
+
+    def next_batch_context(self, src_tokens, buffer):
+        return buffer
+
+    def new_prev_buffer(self, src_tokens, hypos):
+        # We take the most likely sentence from previous generation as context for the next
+        return hypos[0][0]['tokens'].unsqueeze(0)
+
+
+class AudioContextAwareSequenceGenerator(ContextAwareSequenceGenerator):
+    """
+    Generates translations of a given source sentence.
+    This class provides the source audio of the previous sentence as
+    context for the next one.
+    """
+
+    @property
+    def default_buffer(self):
+        return None
+
+    def next_batch_context(self, src_tokens, buffer):
+        if buffer:
+            prev_spectrograms = buffer[-1]
+        else:
+            prev_spectrograms = torch.zeros((src_tokens.size(1), src_tokens.size(2)))
+
+        if src_tokens.shape[0] == 1:
+            return prev_spectrograms
+
+        context = src_tokens[:-1]
+        if context.shape[1] > prev_spectrograms.shape[0]:
+            prev_spectrograms = F.pad(
+                prev_spectrograms, (0, 0, 0, context.shape[1] - prev_spectrograms.shape[0]))
+        elif context.shape[1] < prev_spectrograms.shape[0]:
+            context = F.pad(
+                context, (0, 0, 0, prev_spectrograms.shape[1] - context.shape[0]))
+
+        return torch.cat([prev_spectrograms.unsqueeze(0), context], dim=0)
+
+    def new_prev_buffer(self, src_tokens, hypos):
+        # We take the most likely sentence from previous generation as context for the next
+        return src_tokens[-1]
 
 
 class ContextAwareEnsembleModel(EnsembleModel):

@@ -4,7 +4,9 @@ import os
 import numpy as np
 
 from examples.speech_recognition.data.context_dataset import ContextAwareDataset
-from examples.speech_recognition.sequence_generator_with_context import TargetContextAwareSequenceGenerator
+from examples.speech_recognition.data.fbank_dataset import FilterBanksDataset
+from examples.speech_recognition.sequence_generator_with_context import TargetContextAwareSequenceGenerator, \
+    AudioContextAwareSequenceGenerator
 from examples.speech_recognition.tasks.speech_recognition import SpeechRecognitionTask, \
     get_datasets_from_indexed_filterbanks
 from fairseq import search
@@ -20,6 +22,9 @@ class ContextAwareSpeechRecognitionTask(SpeechRecognitionTask):
     def add_args(parser):
         """Add task-specific arguments to the parser."""
         SpeechRecognitionTask.add_args(parser)
+        parser.add_argument('--context-type', default='tgt', choices=['tgt', 'src'],
+                            help='if src, the context is considered to be the previous audio, otherwise'
+                                 'it is assumed to be the previous text')
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -52,11 +57,18 @@ class ContextAwareSpeechRecognitionTask(SpeechRecognitionTask):
                     self.args.skip_normalization,
                     self.args.legacy_audio_fix_lua_indexing)
                 if self.training:
-                    context_ds = data_utils.load_indexed_dataset(
-                        os.path.join(path, split) + ".context." + self.args.target_lang,
-                        self.tgt_dict,
-                        self.args.dataset_impl)
-                    datasets.append(ContextAwareDataset(ds, context_ds, self.tgt_dict))
+                    if self.args.context_type == 'src':
+                        context_ds = FilterBanksDataset(
+                            os.path.join(path, split) + ".context.npz",
+                            self.args.dataset_impl == "cached",
+                            self.args.legacy_audio_fix_lua_indexing)
+                    else:
+                        context_ds = data_utils.load_indexed_dataset(
+                            os.path.join(path, split) + ".context." + self.args.target_lang,
+                            self.tgt_dict,
+                            self.args.dataset_impl)
+                    datasets.append(ContextAwareDataset(
+                        ds, context_ds, self.tgt_dict, self.args.context_type == 'src'))
                 else:
                     datasets.append(ds)
             except Exception:
@@ -108,7 +120,11 @@ class ContextAwareSpeechRecognitionTask(SpeechRecognitionTask):
             search_strategy = search.DiverseSiblingsSearch(self.target_dictionary, diversity_rate)
         else:
             search_strategy = search.BeamSearch(self.target_dictionary)
-        return TargetContextAwareSequenceGenerator(
+        if args.context_type == 'src':
+            seq_cls = AudioContextAwareSequenceGenerator
+        else:
+            seq_cls = TargetContextAwareSequenceGenerator
+        return seq_cls(
             self.target_dictionary,
             beam_size=getattr(args, 'beam', 5),
             max_len_a=getattr(args, 'max_len_a', 0),

@@ -63,7 +63,10 @@ class ConvolutionalTransformerContextAwareModel(FairseqContextModel):
         decoder_embed_tokens = build_embedding(
             tgt_dict, args.decoder_embed_dim, args.decoder_embed_path)
 
-        context_encoder = PreviousTargetContextEncoder(args, tgt_dict, decoder_embed_tokens)
+        if args.context_type == 'src':
+            context_encoder = PreviousAudioContextEncoder(args, task)
+        else:
+            context_encoder = PreviousTargetContextEncoder(args, tgt_dict, decoder_embed_tokens)
         encoder = ConvolutionalTransformerContextAwareEncoder(
             args, tgt_dict, audio_features=args.input_feat_per_channel)
         decoder = TransformerContextAwareDecoder(args, tgt_dict, decoder_embed_tokens)
@@ -85,6 +88,47 @@ class ConvolutionalTransformerContextAwareModel(FairseqContextModel):
                         p_val.requires_grad = False
 
         return model
+
+
+class PreviousAudioContextEncoder(FairseqEncoder):
+    def __init__(self, args, task):
+        super().__init__(None)
+        assert args.pretrained_model is not None
+        pretrained_models, _ = checkpoint_utils.load_model_ensemble([args.pretrained_model], task=task)
+        self.audio_encoder = pretrained_models[0].encoder
+        if getattr(args, 'freeze_pretrained', False):
+            for p_name, p_val in self.audio_encoder.named_parameters():
+                p_val.requires_grad = False
+        self.n_layers = args.context_encoder_layers
+        self.dropout = args.dropout
+        self.layers = nn.ModuleList([
+            TransformerEncoderLayer(args) for _ in range(self.n_layers)
+        ])
+
+    def forward(self, src_tokens, src_lengths=None):
+        prev_encoder_out = self.audio_encoder(src_tokens, src_lengths=src_lengths)
+        x = prev_encoder_out.encoder_out
+        padding_mask = prev_encoder_out.encoder_padding_mask
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # encoder layers
+        for layer in self.layers:
+            x = layer(x, padding_mask)
+
+        # shapes are: T x B x C, B x T
+        return {
+            'context_out': x,
+            'context_padding_mask': padding_mask,
+        }
+
+    def reorder_encoder_out(self, encoder_out, new_order):
+        if encoder_out['context_out'] is not None:
+            encoder_out['context_out'] = \
+                encoder_out['context_out'].index_select(1, new_order)
+        if encoder_out['context_padding_mask'] is not None:
+            encoder_out['context_padding_mask'] = \
+                encoder_out['context_padding_mask'].index_select(0, new_order)
+        return encoder_out
 
 
 class PreviousTargetContextEncoder(FairseqEncoder):
