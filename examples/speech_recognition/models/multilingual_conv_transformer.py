@@ -136,7 +136,7 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
             lang_pair = k.split('.')[1]
             if lang_pair not in self.models:
                 del state_dict_subset[k]
-        super().load_state_dict(state_dict_subset, strict=strict, args=args)
+        return super().load_state_dict(state_dict_subset, strict=strict, args=args)
 
 
 class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
