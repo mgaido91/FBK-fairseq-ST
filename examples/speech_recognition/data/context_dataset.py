@@ -91,7 +91,8 @@ class ContextAwareDataset(FairseqDataset):
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
-        return self.dataset.size(index)
+        src_size, tgt_size = self.dataset.size(index)
+        return (src_size, tgt_size, self.context_dataset.size(index))
 
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based

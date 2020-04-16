@@ -64,3 +64,7 @@ class FairseqContextModel(FairseqEncoderDecoderModel):
         features = self.decoder.extract_features(
             prev_output_tokens, encoder_out=encoder_out, context_out=context_out, **kwargs)
         return features
+
+    def max_positions(self):
+        """Maximum length supported by the model."""
+        return (self.encoder.max_positions(), self.decoder.max_positions(), self.context_encoder.max_positions())

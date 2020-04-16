@@ -220,3 +220,11 @@ class ContextAwareSpeechRecognitionTask(SpeechRecognitionTask):
         )
         self.dataset_to_epoch_iter[dataset] = epoch_iter
         return epoch_iter
+
+    def max_positions(self):
+        """Return the max speech and sentence length allowed by the task."""
+        if self.args.context_type == 'src':
+            context_max_positions = self.args.max_source_positions
+        else:
+            context_max_positions = self.args.max_target_positions
+        return (self.args.max_source_positions, self.args.max_target_positions, context_max_positions)
