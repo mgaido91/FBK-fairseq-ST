@@ -133,13 +133,14 @@ class AudioContextAwareSequenceGenerator(ContextAwareSequenceGenerator):
         return None
 
     def next_batch_context(self, src_tokens, buffer):
-        if buffer:
-            prev_spectrograms = buffer[-1]
+        if buffer is not None:
+            prev_spectrograms = buffer
         else:
-            prev_spectrograms = torch.zeros((src_tokens.size(1), src_tokens.size(2)))
+            prev_spectrograms = torch.zeros(
+                (src_tokens.size(1), src_tokens.size(2))).to(src_tokens.device)
 
         if src_tokens.shape[0] == 1:
-            return prev_spectrograms
+            return prev_spectrograms.unsqueeze(0)
 
         context = src_tokens[:-1]
         if context.shape[1] > prev_spectrograms.shape[0]:
@@ -147,7 +148,7 @@ class AudioContextAwareSequenceGenerator(ContextAwareSequenceGenerator):
                 prev_spectrograms, (0, 0, 0, context.shape[1] - prev_spectrograms.shape[0]))
         elif context.shape[1] < prev_spectrograms.shape[0]:
             context = F.pad(
-                context, (0, 0, 0, prev_spectrograms.shape[1] - context.shape[0]))
+                context, (0, 0, 0, prev_spectrograms.shape[0] - context.shape[1]))
 
         return torch.cat([prev_spectrograms.unsqueeze(0), context], dim=0)
 
