@@ -28,7 +28,7 @@ class ContextAwareDataset(FairseqDataset):
         return item
 
     def __len__(self):
-        return len(self.tgt_dataset)
+        return len(self.dataset)
 
     def _collate_frames(self, frames):
         """Convert a list of 2d frames into a padded 3d tensor
