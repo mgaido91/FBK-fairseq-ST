@@ -94,6 +94,10 @@ class ContextAwareDataset(FairseqDataset):
         src_size, tgt_size = self.dataset.size(index)
         return (src_size, tgt_size, self.context_dataset.size(index))
 
+    @property
+    def sizes(self):
+        return self.dataset.sizes
+
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based
         on this order."""
