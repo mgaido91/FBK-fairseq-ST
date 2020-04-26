@@ -90,6 +90,15 @@ class CrossEntropyKnowledgeDistillationCriterion(FairseqCriterion):
         }
         return loss, sample_size, logging_output
 
+    @staticmethod
+    def logging_outputs_can_be_summed() -> bool:
+        """
+        Whether the logging outputs returned by `forward` can be summed
+        across workers prior to calling `reduce_metrics`. Setting this
+        to True will improves distributed training speed.
+        """
+        return True
+
     @classmethod
     def reduce_metrics(cls, logging_outputs):
         """Aggregate logging outputs from data parallel training."""
