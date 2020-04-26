@@ -4,7 +4,7 @@ import os
 import torch
 import numpy as np
 
-from fairseq import utils, options, tasks, progress_bar
+from fairseq import utils, options, tasks, progress_bar, checkpoint_utils
 from fairseq.data.knowledge_distillation import TeacherOutputDataset
 
 
@@ -22,8 +22,8 @@ def gen_outputs(args):
 
     # Load ensemble
     logger.info('loading model(s) from {}'.format(args.path))
-    models, _ = utils.load_ensemble_for_inference(
-        args.path.split(':'), task, model_arg_overrides=eval(args.model_overrides))
+    models, _ = checkpoint_utils.load_model_ensemble(
+        args.path.split(':'), task=task, arg_overrides=eval(args.model_overrides))
     assert len(models) == 1
     model = models[0]
     # Optimize ensemble for generation
@@ -33,6 +33,8 @@ def gen_outputs(args):
     )
     if args.fp16:
         model.half()
+    if use_cuda:
+        model.cuda()
 
     # Load dataset (possibly sharded)
     itr = task.get_batch_iterator(
@@ -76,11 +78,11 @@ def save_expert_outputs(args, expert_outputs):
     src_lang = args.source_lang
     tgt_lang = args.target_lang
     file_prefix = '{}.{}-{}.{}'.format(args.gen_subset, src_lang, tgt_lang, tgt_lang)
-    path = os.path.join(args.data[0], file_prefix + '.top{}_idx'.format(args.distill_topk))
+    path = os.path.join(args.data, file_prefix + '.top{}_idx'.format(args.distill_topk))
     TeacherOutputDataset.save_bin(path, [o[0] for o in expert_outputs], np.int32)
     logger.info("Written {}".format(path))
 
-    path = os.path.join(args.data[0], file_prefix + '.top{}_out'.format(args.distill_topk))
+    path = os.path.join(args.data, file_prefix + '.top{}_out'.format(args.distill_topk))
     TeacherOutputDataset.save_bin(path, [o[1] for o in expert_outputs], np.float32)
     logger.info("Written {}".format(path))
 
