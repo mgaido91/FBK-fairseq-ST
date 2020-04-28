@@ -227,7 +227,7 @@ class SpeechRecognitionTask(FairseqTask):
         """Return the max speech and sentence length allowed by the task."""
         return (self.args.max_source_positions, self.args.max_target_positions)
 
-    def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
+    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False):
         """
         Do forward and backward, and return the loss as computed by *criterion*
         for the given *model* and *sample*.

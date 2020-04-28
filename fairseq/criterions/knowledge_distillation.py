@@ -18,12 +18,17 @@ from . import FairseqCriterion, register_criterion
 class CrossEntropyKnowledgeDistillationCriterion(FairseqCriterion):
 
     def __init__(self, args, task):
-        super().__init__(args, task)
+        super().__init__(task)
         # Lambda ranges between 0.0 and 1.0. 0.0 means that we only use the ground
         # truth labels (ie. it is the same as the normal cross entropy); 1.0 means
         # that only the teacher output is taken in account.
         self._lambda = args.kd_lambda
         self.temperature = args.kd_temperature
+        self.sentence_avg = args.sentence_avg
+
+    @classmethod
+    def build_criterion(cls, args, task):
+        return cls(args, task)
 
     @staticmethod
     def add_args(parser):
@@ -79,7 +84,7 @@ class CrossEntropyKnowledgeDistillationCriterion(FairseqCriterion):
             assert teacher_loss.shape == truth_loss.shape
         loss = (1.0 - self._lambda) * truth_loss + self._lambda * teacher_loss
 
-        sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
+        sample_size = sample['target'].size(0) if self.sentence_avg else sample['ntokens']
         if reduce:
             loss = loss.sum()
         logging_output = {

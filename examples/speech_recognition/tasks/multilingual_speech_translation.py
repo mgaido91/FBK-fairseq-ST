@@ -182,7 +182,7 @@ class MultilingualSpeechTranslationTask(MultilingualTranslationTask):
             '--langtok-merge-strategy should be {}.'.format(args.langtok_merge_strategy)
         return super().build_model(args)
 
-    def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
+    def train_step(self, sample, model, criterion, optimizer, update_num, ignore_grad=False):
         model.train()
         from collections import defaultdict
         agg_loss, agg_sample_size, agg_logging_output = 0., 0., defaultdict(float)

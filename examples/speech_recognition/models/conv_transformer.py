@@ -213,6 +213,8 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             encoder_padding_mask=encoder_padding_mask,  # B x T
             encoder_embedding=None,
             encoder_states=encoder_states,  # List[T x B x C]
+            src_tokens=src_tokens,
+            src_lengths=src_lengths
         )
 
     def create_mask(self, lengths):
@@ -335,6 +337,7 @@ def base_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big')
@@ -374,6 +377,7 @@ def speechtransformer_big(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big2')
@@ -413,6 +417,7 @@ def speechtransformer_big2(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_giant')
@@ -452,3 +457,4 @@ def speechtransformer_giant(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
