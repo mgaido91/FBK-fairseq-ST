@@ -485,6 +485,11 @@ class DummyEncoderModel(FairseqEncoderModel):
             torch.div(net_output["encoder_out"], 1 - net_output["encoder_out"])
         )
 
+    def get_normalized_probs(self, net_output, log_probs, sample=None):
+        lprobs = super().get_normalized_probs(net_output, log_probs, sample=sample)
+        lprobs.batch_first = True
+        return lprobs
+
 
 class DummyEncoder(FairseqEncoder):
     def __init__(self):
@@ -511,7 +516,7 @@ class CrossEntropyCriterionTestBase(unittest.TestCase):
     def setUp(self):
         args = self.setUpArgs()
         self.model = DummyEncoderModel(encoder=DummyEncoder())
-        self.criterion = self.criterion_cls(args=args, task=DummyTask(args))
+        self.criterion = self.criterion_cls.build_criterion(args=args, task=DummyTask(args))
 
     def get_src_tokens(self, correct_prediction, aggregate):
         """

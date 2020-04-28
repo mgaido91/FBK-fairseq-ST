@@ -198,7 +198,7 @@ class SpeechRecognitionTask(FairseqTask):
         else:
             self.datasets[split] = datasets[0]
 
-    def build_generator(self, args):
+    def build_generator(self, models, args):
         w2l_decoder = getattr(args, "w2l_decoder", None)
         if w2l_decoder == "viterbi":
             from examples.speech_recognition.w2l_decoder import W2lViterbiDecoder
@@ -209,7 +209,7 @@ class SpeechRecognitionTask(FairseqTask):
 
             return W2lKenLMDecoder(args, self.target_dictionary)
         else:
-            return super().build_generator(args)
+            return super().build_generator(models, args)
 
     @property
     def target_dictionary(self):
