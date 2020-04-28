@@ -31,6 +31,8 @@ class ConvolutionalTransformerContextAwareModel(FairseqContextModel):
                             help='num context encoder layers', default=1)
         parser.add_argument('--context-position', type=str, default="both",
                             choices=['both', 'encoder', "decoder"], )
+        parser.add_argument('--context-decoder-attention-type', type=str, default="sequential",
+                            choices=['parallel', "sequential"])
         parser.add_argument('--pretrained-model', type=str, default=None,
                             help='path to a pretrained context-unaware model')
         parser.add_argument('--freeze-pretrained', action='store_true',

@@ -102,10 +102,12 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
         super().__init__(
             args, no_encoder_attn=no_encoder_attn, add_bias_kv=add_bias_kv, add_zero_attn=add_zero_attn)
         self.add_context = args.context_position in ["both", "decoder"]
+        self.context_attention_type = args.context_decoder_attention_type
         if self.add_context:
             self.context_attn = MultiheadAttention(
                 self.embed_dim, args.decoder_attention_heads,
-                dropout=args.attention_dropout
+                dropout=args.attention_dropout,
+                encoder_decoder_attention=True,
             )
             self.context_gating_wi = Linear(self.embed_dim, self.embed_dim)
             self.context_gating_ws = Linear(self.embed_dim, self.embed_dim)
@@ -201,6 +203,10 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
             residual = x
             if self.normalize_before:
                 x = self.encoder_attn_layer_norm(x)
+            # If parallel context attention is enabled, we need the normalized
+            # input for the context cross-attention
+            if self.add_context and self.context_attention_type == "parallel":
+                query_ctx = x
             if prev_attn_state is not None:
                 prev_key, prev_value = prev_attn_state[:2]
                 saved_state: Dict[str, Optional[Tensor]] = {
@@ -229,15 +235,27 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
 
         # Context attention
         if self.add_context:
-            residual = x
-            if self.normalize_before:
-                x = self.context_attn_layer_norm(x)
-            x, _ = self.context_attn(query=x, key=context, value=context, key_padding_mask=context_padding_mask)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            lambda_gating = torch.sigmoid(self.context_gating_wi(residual) + self.context_gating_ws(x))
-            x = lambda_gating * residual + (1 - lambda_gating) * x
-            if not self.normalize_before:
-                x = self.context_attn_layer_norm(x)
+            if self.context_attention_type == "sequential":
+                residual = x
+                if self.normalize_before:
+                    x = self.context_attn_layer_norm(x)
+                x, _ = self.context_attn(
+                    query=x, key=context, value=context, key_padding_mask=context_padding_mask,
+                    incremental_state=incremental_state, static_kv=True)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+                lambda_gating = torch.sigmoid(self.context_gating_wi(residual) + self.context_gating_ws(x))
+                x = lambda_gating * residual + (1 - lambda_gating) * x
+                if not self.normalize_before:
+                    x = self.context_attn_layer_norm(x)
+            elif self.context_attention_type == "parallel":
+                c_x, _ = self.context_attn(
+                    query=query_ctx, key=context, value=context, key_padding_mask=context_padding_mask,
+                    incremental_state=incremental_state, static_kv=True)
+                c_x = F.dropout(c_x, p=self.dropout, training=self.training)
+                lambda_gating = torch.sigmoid(self.context_gating_wi(x) + self.context_gating_ws(c_x))
+                x = lambda_gating * x + (1 - lambda_gating) * c_x
+            else:
+                raise RuntimeError("Invalid decoder context attention type {}".format(self.context_attention_type))
 
         residual = x
         if self.normalize_before:
