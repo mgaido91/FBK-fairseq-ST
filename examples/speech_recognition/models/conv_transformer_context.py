@@ -35,8 +35,11 @@ class ConvolutionalTransformerContextAwareModel(FairseqContextModel):
                             choices=['parallel', "sequential"])
         parser.add_argument('--pretrained-model', type=str, default=None,
                             help='path to a pretrained context-unaware model')
-        parser.add_argument('--freeze-pretrained', action='store_true',
-                            help='if set, all params loaded from the pretrained model are freezed')
+        parser.add_argument('--freeze-pretrained', type=str, default="encoder",
+                            choices=['all', 'encoder', "none"],
+                            help='by default ("encoder") only encoder pretrained weights are freezed; '
+                                 'if set to "none", no parameter is freezed (be careful to OOM);'
+                                 'if set to "all", all params loaded from the pretrained model are freezed.')
 
     @classmethod
     def build_model(cls, args, task):
@@ -84,9 +87,10 @@ class ConvolutionalTransformerContextAwareModel(FairseqContextModel):
             for missing_key in incompatible_keys.missing_keys:
                 if 'context' not in missing_key:
                     logger.error("Loaded checkpoint misses the parameter: {}.".format(missing_key))
-            if getattr(args, 'freeze_pretrained', False):
+            if args.freeze_pretrained != "none":
                 for p_name, p_val in model.named_parameters():
-                    if p_name in pretrained_model_state["model"]:
+                    if p_name in pretrained_model_state["model"] and \
+                            (args.freeze_pretrained == "all" or "decoder" not in p_name):
                         p_val.requires_grad = False
 
         return model
@@ -98,7 +102,7 @@ class PreviousAudioContextEncoder(FairseqEncoder):
         assert args.pretrained_model is not None
         pretrained_models, _ = checkpoint_utils.load_model_ensemble([args.pretrained_model], task=task)
         self.audio_encoder = pretrained_models[0].encoder
-        if getattr(args, 'freeze_pretrained', False):
+        if args.freeze_pretrained != "none":
             for p_name, p_val in self.audio_encoder.named_parameters():
                 p_val.requires_grad = False
         self.n_layers = args.context_encoder_layers
