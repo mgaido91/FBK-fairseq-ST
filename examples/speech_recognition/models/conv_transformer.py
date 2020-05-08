@@ -7,11 +7,12 @@
 
 
 import math
+from itertools import groupby
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, NamedTuple
 
 from examples.speech_recognition.modules.conv_attention_2d import ConvAttention2D
 from examples.speech_recognition.modules.conv_transformer_layer import ConvTransformerEncoderLayer
@@ -19,6 +20,13 @@ from examples.speech_recognition.modules.positional_embedding_audio import Posit
 from fairseq import utils
 from fairseq.models import register_model, FairseqEncoderDecoderModel, fconv, register_model_architecture, FairseqEncoder
 from fairseq.models.transformer import TransformerDecoder, EncoderOut, TransformerModel
+
+
+CTCAwareEncoderOut = NamedTuple(
+    'CTCAwareEncoderOut',
+    list(EncoderOut._field_types.items()) + [
+        ("ctc_out", torch.Tensor),
+        ("ctc_padding_mask", torch.Tensor)],)
 
 
 @register_model('conv_transformer')
@@ -52,6 +60,8 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
                             help='Add distance penalty to the encoder')
         parser.add_argument('--init-variance', type=float, default=1.0,
                             help='Initialization value for variance')
+        parser.add_argument('--ctc-compress-out',  action='store_true', default=False,
+                            help="If set, compress the CTC output based on predictions")
 
     @classmethod
     def build_model(cls, args, task):
@@ -80,7 +90,7 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
         decoder_embed_tokens = build_embedding(
             tgt_dict, args.decoder_embed_dim, args.decoder_embed_path)
         encoder = ConvolutionalTransformerEncoder(
-            args, tgt_dict, audio_features=args.input_feat_per_channel)
+            args, src_dict if src_dict is not None else tgt_dict, audio_features=args.input_feat_per_channel)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
         return ConvolutionalTransformerModel(encoder, decoder)
 
@@ -97,6 +107,7 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
     """
     def __init__(self, args, dictionary, audio_features=40):
         super().__init__(dictionary)
+        self.version = torch.IntTensor([2])
         convolutions = eval(args.encoder_convolutions) if args.encoder_convolutions is not None else ((512, 3),) * 2
         stride = 2
         self.dropout = args.dropout
@@ -149,6 +160,11 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             self.layernorm_embedding = LayerNorm(args.encoder_embed_dim)
         else:
             self.layernorm_embedding = None
+        self.ctc_compress_out = args.ctc_compress_out
+        if self.ctc_compress_out:
+            self.ctc_fc = nn.Linear(args.encoder_embed_dim, len(dictionary))
+            assert args.criterion == "ctc_multi_loss"
+            self.ctc_layer = args.ctc_encoder_layer
 
     def forward(
         self,
@@ -194,11 +210,16 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
         encoder_states = [] if return_all_hiddens else None
 
         # encoder layers
-        for layer in self.layers:
+        for l_idx, layer in enumerate(self.layers):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = torch.empty(1).uniform_()
             if not self.training or (dropout_probability > self.encoder_layerdrop):
                 x = layer(x, encoder_padding_mask)
+                if self.ctc_compress_out and self.ctc_layer == l_idx + 1:
+                    ctc_padding_mask = encoder_padding_mask
+                    x_ctc, x, src_lengths = self.average_same_ctc_features(x, src_lengths)
+                    encoder_padding_mask = self.create_mask(src_lengths)
+
                 if return_all_hiddens:
                     assert encoder_states is not None
                     encoder_states.append(x)
@@ -207,13 +228,45 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             x = self.layer_norm(x)
             if return_all_hiddens:
                 encoder_states[-1] = x
+        if self.ctc_compress_out:
+            return CTCAwareEncoderOut(
+                encoder_out=x,  # T x B x C
+                encoder_padding_mask=encoder_padding_mask,  # B x T
+                encoder_embedding=None,
+                encoder_states=encoder_states,  # List[T x B x C]
+                ctc_out=x_ctc,  # T x B x D
+                ctc_padding_mask=ctc_padding_mask
+            )
+        else:
+            return EncoderOut(
+                encoder_out=x,  # T x B x C
+                encoder_padding_mask=encoder_padding_mask,  # B x T
+                encoder_embedding=None,
+                encoder_states=encoder_states,  # List[T x B x C]
+            )
 
-        return EncoderOut(
-            encoder_out=x,  # T x B x C
-            encoder_padding_mask=encoder_padding_mask,  # B x T
-            encoder_embedding=None,
-            encoder_states=encoder_states,  # List[T x B x C]
-        )
+    def average_same_ctc_features(self, x, src_lengths):
+        x_ctc = self.ctc_fc(x)
+        with torch.no_grad():
+            batch_predicted = []
+            prob_ctc = F.softmax(x_ctc, dim=-1).transpose(0, 1)  # from T x B x D to B x T x D
+            for b in range(prob_ctc.shape[0]):
+                predicted = prob_ctc[b][: src_lengths[b]].argmax(-1).tolist()
+                batch_predicted.append([(p[0], len(p)) for p in groupby(predicted)])
+
+            new_lengths = [len(p) for p in batch_predicted]
+            new_maxlen = max(new_lengths)
+            weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=x.dtype)
+            processed_inputs_cnt = 0
+            for b_idx, pred in enumerate(batch_predicted):
+                for t_idx, same in enumerate(pred):
+                    new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                    weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = 1.0 / same[1]
+                    processed_inputs_cnt = new_processed_inputs_cnt
+            weights_matrix = weights_matrix.to(x.device)
+        # x is T x B x C -> B x C x T; weights_matrix is B x T x T'
+        compressed_output = x.transpose(1, 2, 0).bmm(weights_matrix)  # B x C x T'
+        return x_ctc, compressed_output.transpose(2, 0, 1), src_lengths.new(new_lengths)
 
     def create_mask(self, lengths):
         max_len = max(lengths)
@@ -259,6 +312,15 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             for idx, state in enumerate(encoder_out.encoder_states):
                 encoder_out.encoder_states[idx] = state.index_select(1, new_order)
         return encoder_out
+
+    def upgrade_state_dict(self, state_dict):
+        if self.ctc_compress_out and \
+                utils.item(state_dict.get('encoder.version', torch.Tensor([1]))[0]) < 2:
+            if "ctc_aware_model.fc_out.weight" in state_dict["criterion"]:
+                state_dict["model"]["encoder.ctc_fc.weight"] =\
+                    state_dict["criterion"]["ctc_aware_model.fc_out.weight"]
+                state_dict["model"]["encoder.ctc_fc.bias"] = \
+                    state_dict["criterion"]["ctc_aware_model.fc_out.bias"]
 
 
 def Conv2D(in_channels, out_channels, kernel_size, dropout=0, **kwargs):
