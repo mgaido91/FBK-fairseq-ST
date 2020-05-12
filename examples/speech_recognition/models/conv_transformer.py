@@ -94,6 +94,15 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
         return ConvolutionalTransformerModel(encoder, decoder)
 
+    def raw_state_dict_upgrade(self, state_dict):
+        if self.encoder.ctc_compress_out and "encoder.ctc_fc.weight" not in state_dict["model"]:
+            if "ctc_aware_model.fc_out.weight" in state_dict["criterion"]:
+                state_dict["model"]["encoder.ctc_fc.weight"] = \
+                    state_dict["criterion"]["ctc_aware_model.fc_out.weight"]
+                state_dict["model"]["encoder.ctc_fc.bias"] = \
+                    state_dict["criterion"]["ctc_aware_model.fc_out.bias"]
+        return state_dict
+
 
 class ConvolutionalTransformerEncoder(FairseqEncoder):
     """
@@ -107,7 +116,6 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
     """
     def __init__(self, args, dictionary, audio_features=40):
         super().__init__(dictionary)
-        self.version = torch.IntTensor([2])
         convolutions = eval(args.encoder_convolutions) if args.encoder_convolutions is not None else ((512, 3),) * 2
         stride = 2
         self.dropout = args.dropout
@@ -312,15 +320,6 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             for idx, state in enumerate(encoder_out.encoder_states):
                 encoder_out.encoder_states[idx] = state.index_select(1, new_order)
         return encoder_out
-
-    def upgrade_state_dict(self, state_dict):
-        if self.ctc_compress_out and \
-                utils.item(state_dict.get('encoder.version', torch.Tensor([1]))[0]) < 2:
-            if "ctc_aware_model.fc_out.weight" in state_dict["criterion"]:
-                state_dict["model"]["encoder.ctc_fc.weight"] =\
-                    state_dict["criterion"]["ctc_aware_model.fc_out.weight"]
-                state_dict["model"]["encoder.ctc_fc.bias"] = \
-                    state_dict["criterion"]["ctc_aware_model.fc_out.bias"]
 
 
 def Conv2D(in_channels, out_channels, kernel_size, dropout=0, **kwargs):

@@ -176,6 +176,7 @@ class Trainer(object):
 
             # load model parameters
             try:
+                state = self.get_model().raw_state_dict_upgrade(state)
                 incompatible_keys = self.get_model().load_state_dict(
                     state["model"], strict=(not allow_non_strict_loading), args=self.args
                 )
