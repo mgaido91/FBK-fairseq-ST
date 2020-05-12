@@ -260,7 +260,7 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             prob_ctc = F.softmax(x_ctc, dim=-1).transpose(0, 1)  # from T x B x D to B x T x D
             for b in range(prob_ctc.shape[0]):
                 predicted = prob_ctc[b][: src_lengths[b]].argmax(-1).tolist()
-                batch_predicted.append([(p[0], len(p)) for p in groupby(predicted)])
+                batch_predicted.append([(p[0], len(list(p[1]))) for p in groupby(predicted)])
 
             new_lengths = [len(p) for p in batch_predicted]
             new_maxlen = max(new_lengths)
@@ -273,8 +273,8 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
                     processed_inputs_cnt = new_processed_inputs_cnt
             weights_matrix = weights_matrix.to(x.device)
         # x is T x B x C -> B x C x T; weights_matrix is B x T x T'
-        compressed_output = x.transpose(1, 2, 0).bmm(weights_matrix)  # B x C x T'
-        return x_ctc, compressed_output.transpose(2, 0, 1), src_lengths.new(new_lengths)
+        compressed_output = x.permute(1, 2, 0).bmm(weights_matrix)  # B x C x T'
+        return x_ctc, compressed_output.permute(2, 0, 1), src_lengths.new(new_lengths)
 
     def create_mask(self, lengths):
         max_len = max(lengths)
