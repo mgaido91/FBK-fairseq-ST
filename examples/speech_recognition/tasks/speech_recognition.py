@@ -124,6 +124,8 @@ class SpeechRecognitionTask(FairseqTask):
                             help="Probability to apply specaugment to a spectrogram")
         parser.add_argument('--time-stretch', action='store_true',
                             help="If set, activates time stretch on spectrograms")
+        parser.add_argument('--time-stretch-rate', type=float, default=1.0,
+                            help="Probability to apply time stretch to a spectrogram")
         parser.add_argument('--time-stretch-w', type=int, default=1, help='Window size for time stretch')
         parser.add_argument('--time-stretch-low', type=float, default=0.8, help='Low side of the stretch range')
         parser.add_argument('--time-stretch-high', type=float, default=1.25, help='High side of the stretch range')
@@ -143,7 +145,8 @@ class SpeechRecognitionTask(FairseqTask):
             self.specaugment = None
         time_stretch = getattr(args, 'time_stretch', False)
         if time_stretch:
-            self.time_stretch = TimeStretch(args.time_stretch_w, args.time_stretch_low, args.time_stretch_high)
+            self.time_stretch = TimeStretch(
+                args.time_stretch_rate, args.time_stretch_w, args.time_stretch_low, args.time_stretch_high)
         else:
             self.time_stretch = None
 
