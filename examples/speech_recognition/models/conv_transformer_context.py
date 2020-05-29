@@ -429,8 +429,9 @@ class TransformerContextAwareDecoder(TransformerDecoder):
 
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = torch.empty(1).uniform_()
+            ctx_gates = []
             if not self.training or (dropout_probability > self.decoder_layerdrop):
-                x, layer_attn, _ = layer(
+                x, layer_attn, _, ctx_gate = layer(
                     x,
                     encoder_state,
                     encoder_out.encoder_padding_mask
@@ -445,6 +446,7 @@ class TransformerContextAwareDecoder(TransformerDecoder):
                     need_head_weights=bool((idx == alignment_layer)),
                 )
                 inner_states.append(x)
+                ctx_gates.append(ctx_gate)
                 if layer_attn is not None and idx == alignment_layer:
                     attn = layer_attn.float().to(x)
 
@@ -464,7 +466,7 @@ class TransformerContextAwareDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states}
+        return x, {"attn": [attn], "inner_states": inner_states, "ctx_gates": ctx_gates}
 
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):

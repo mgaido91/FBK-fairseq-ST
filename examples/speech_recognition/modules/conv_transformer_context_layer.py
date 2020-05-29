@@ -234,6 +234,7 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
                 x = self.encoder_attn_layer_norm(x)
 
         # Context attention
+        ctx_gate = None
         if self.add_context:
             if self.context_attention_type == "sequential":
                 residual = x
@@ -254,6 +255,7 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
                 c_x = F.dropout(c_x, p=self.dropout, training=self.training)
                 lambda_gating = torch.sigmoid(self.context_gating_wi(x) + self.context_gating_ws(c_x))
                 x = lambda_gating * x + (1 - lambda_gating) * c_x
+                ctx_gate = (1 - lambda_gating)
             else:
                 raise RuntimeError("Invalid decoder context attention type {}".format(self.context_attention_type))
 
@@ -278,8 +280,8 @@ class TransformerContextAwareDecoderLayer(TransformerDecoderLayer):
                 ]
             else:
                 self_attn_state = [saved_state["prev_key"], saved_state["prev_value"]]
-            return x, attn, self_attn_state
-        return x, attn, None
+            return x, attn, self_attn_state, ctx_gate
+        return x, attn, None, ctx_gate
 
 
 def LayerNorm(embedding_dim):
