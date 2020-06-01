@@ -7,6 +7,7 @@
 
 
 from collections import OrderedDict
+import logging
 
 import torch
 from typing import Optional
@@ -17,9 +18,13 @@ from examples.speech_recognition.data.data_utils import lengths_to_encoder_paddi
 from examples.speech_recognition.models.conv_transformer import ConvolutionalTransformerModel, \
     ConvolutionalTransformerEncoder, base_architecture, speechtransformer_big2, speechtransformer_big
 from fairseq import utils, checkpoint_utils
+from fairseq.checkpoint_utils import load_checkpoint_to_cpu
 from fairseq.models import register_model, register_model_architecture, FairseqMultiModel
 from fairseq.models.transformer import TransformerDecoder
 from fairseq.tasks.multilingual_translation import _lang_token_index
+
+
+logger = logging.getLogger(__name__)
 
 
 @register_model('multilingual_conv_transformer')
@@ -98,6 +103,38 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
                     )
                 lang_decoders[lang] = TokenWiseTransformerDecoder(
                     args, task.dicts[lang], decoder_embed_tokens, task.args.target_lang)
+                if args.pretrained_decoder is not None:
+                    decoder_loaded_state = load_checkpoint_to_cpu(args.pretrained_decoder)
+                    if args.encoder_langtok is not None or args.decoder_langtok:
+
+                        def resize_model_to_new_dict(weights_tensor):
+                            old_shape = weights_tensor.shape
+                            new_tensor = weights_tensor.new_empty((old_shape[0] + len(task.langs), old_shape[1]))
+                            nn.init.xavier_uniform_(new_tensor, gain=nn.init.calculate_gain('relu'))
+                            new_tensor[:old_shape[0], :] = weights_tensor
+                            return new_tensor
+
+                        decoder_loaded_state["model"]["decoder.embed_tokens.weight"] = resize_model_to_new_dict(
+                            decoder_loaded_state["model"]["decoder.embed_tokens.weight"]
+                        )
+                        decoder_loaded_state["model"]["decoder.output_projection.weight"] = resize_model_to_new_dict(
+                            decoder_loaded_state["model"]["decoder.output_projection.weight"]
+                        )
+                    new_component_state_dict = OrderedDict()
+                    for key in decoder_loaded_state["model"].keys():
+                        if key.startswith("decoder"):
+                            # decoder.input_layers.0.0.weight --> input_layers.0.0.weight
+                            component_subkey = key[8:]
+                            new_component_state_dict[component_subkey] = decoder_loaded_state["model"][key]
+                    incompatible_keys = lang_decoders[lang].load_state_dict(
+                        new_component_state_dict, strict=(not args.allow_partial_restore))
+                    if len(incompatible_keys.unexpected_keys) != 0:
+                        logger.error("Cannot load the following keys from checkpoint: {}".format(
+                            incompatible_keys.unexpected_keys))
+                        raise ValueError("Cannot load from checkpoint: {}".format(args.pretrained_decoder))
+                    if len(incompatible_keys.missing_keys) > 0:
+                        logger.info("Loaded checkpoint misses the parameters: {}".format(
+                            incompatible_keys.missing_keys))
             return lang_decoders[lang]
 
         # shared encoders/decoders (if applicable)
@@ -120,6 +157,8 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
         ConvolutionalTransformerModel.add_args(parser)
         parser.add_argument('--pretrained-encoder', type=str, default=None,
                             help='path to a pretrained encoder')
+        parser.add_argument('--pretrained-decoder', type=str, default=None,
+                            help='path to a pretrained decoder')
         parser.add_argument('--share-encoder-embeddings', action='store_true',
                             help='share encoder embeddings across languages')
         parser.add_argument('--share-decoder-embeddings', action='store_true',
