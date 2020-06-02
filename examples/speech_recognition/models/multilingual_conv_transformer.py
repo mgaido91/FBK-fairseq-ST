@@ -220,7 +220,7 @@ class TokenWiseConvolutionalTransformerEncoder(ConvolutionalTransformerEncoder):
 
 class TokenWiseTransformerDecoder(TransformerDecoder):
     def __init__(self, args, dictionary,  embed_tokens, target_lang, no_encoder_attn=False):
-        if args.langtok_merge_strategy == 'sum':
+        if args.langtok_merge_strategy == 'sum' and args.decoder_langtok:
             if target_lang is not None:
                 target_lang_idx = _lang_token_index(dictionary, target_lang)
             else:
