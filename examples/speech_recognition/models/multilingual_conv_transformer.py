@@ -114,12 +114,18 @@ class MultilingualConvolutionalTransformerModel(FairseqMultiModel):
                             new_tensor[:old_shape[0], :] = weights_tensor
                             return new_tensor
 
-                        decoder_loaded_state["model"]["decoder.embed_tokens.weight"] = resize_model_to_new_dict(
+                        decoder_embed_tokens_key = "decoder.embed_tokens.weight"
+                        if args.decoder_langtok and args.langtok_merge_strategy == "sum":
+                            decoder_embed_tokens_key = "decoder.embed_tokens.base_embeddings.weight"
+
+                        decoder_loaded_state["model"][decoder_embed_tokens_key] = resize_model_to_new_dict(
                             decoder_loaded_state["model"]["decoder.embed_tokens.weight"]
                         )
                         decoder_loaded_state["model"]["decoder.output_projection.weight"] = resize_model_to_new_dict(
                             decoder_loaded_state["model"]["decoder.output_projection.weight"]
                         )
+                        if args.decoder_langtok and args.langtok_merge_strategy == "sum":
+                            del decoder_loaded_state["model"]["decoder.embed_tokens.weight"]
                     new_component_state_dict = OrderedDict()
                     for key in decoder_loaded_state["model"].keys():
                         if key.startswith("decoder"):
