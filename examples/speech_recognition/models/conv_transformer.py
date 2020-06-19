@@ -4,8 +4,7 @@
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
-
-
+import logging
 import math
 from itertools import groupby
 
@@ -20,6 +19,8 @@ from examples.speech_recognition.modules.positional_embedding_audio import Posit
 from fairseq import utils
 from fairseq.models import register_model, FairseqEncoderDecoderModel, fconv, register_model_architecture, FairseqEncoder
 from fairseq.models.transformer import TransformerDecoder, EncoderOut, TransformerModel
+
+logger = logging.getLogger(__name__)
 
 
 CTCAwareEncoderOut = NamedTuple(
@@ -62,6 +63,8 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
                             help='Initialization value for variance')
         parser.add_argument('--ctc-compress-out',  action='store_true', default=False,
                             help="If set, compress the CTC output based on predictions")
+        parser.add_argument('--freeze-pretrained', action='store_true',
+                            help='if set, all params loaded from the pretrained model are freezed')
 
     @classmethod
     def build_model(cls, args, task):
@@ -102,6 +105,15 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
                 state_dict["model"]["encoder.ctc_fc.bias"] = \
                     state_dict["criterion"]["ctc_aware_model.fc_out.bias"]
         return state_dict
+
+    def load_state_dict(self, state_dict, strict=True, args=None):
+        loaded_model = super().load_state_dict(state_dict, strict)
+        if getattr(args, "freeze_pretrained", False):
+            logger.info("Freezing pretrained weights")
+            for p_name, p_val in loaded_model.named_parameters():
+                if p_name in state_dict["model"]:
+                    p_val.requires_grad = False
+        return loaded_model
 
 
 class ConvolutionalTransformerEncoder(FairseqEncoder):
