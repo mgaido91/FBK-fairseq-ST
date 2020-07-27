@@ -1,3 +1,21 @@
+# FBK-fairseq-ST
+
+This repository is a fork of
+https://github.com/pytorch/fairseq containing
+additional code used for our papers.
+Most of our code is in the `examples/speech_recognition` folder.
+
+If you use this code, please consider citing the related paper.
+The repository contains the code for:
+
+<ul>
+    <li>Contextualized Translation of Automatically Segmented Speech</li>
+</ul>
+
+
+Below, there is the original README file.
+
+
 <p align="center">
   <img src="fairseq_logo.png" width="150">
   <br />
