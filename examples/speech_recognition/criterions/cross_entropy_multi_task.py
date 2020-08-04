@@ -16,7 +16,10 @@ class CrossEntropyMultitask(FairseqCriterion):
         self.eps = args.label_smoothing
         self.auxiliary_loss_weight = args.auxiliary_loss_weight
         self.sentence_avg = args.sentence_avg
-        self.auxiliary_loss_class_weights = torch.FloatTensor(args.auxiliary_loss_class_weights)
+        if args.auxiliary_loss_class_weights is not None:
+            self.auxiliary_loss_class_weights = torch.FloatTensor(args.auxiliary_loss_class_weights)
+        else:
+            self.auxiliary_loss_class_weights = None
 
     @classmethod
     def build_criterion(cls, args, task):
