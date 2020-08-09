@@ -130,6 +130,7 @@ class SpeechRecognitionTask(FairseqTask):
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
+        self.is_source_speech = True
         self.tgt_dict = tgt_dict
         self.paths = args.data.split(os.pathsep)
         specaugment = getattr(args, 'specaugment', False)

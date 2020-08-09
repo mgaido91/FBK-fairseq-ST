@@ -57,7 +57,10 @@ def _main(args, output_file):
 
     # Set dictionaries
     try:
-        src_dict = getattr(task, 'source_dictionary', None)
+        if not getattr(task, 'is_source_speech', False):
+            src_dict = getattr(task, 'source_dictionary', None)
+        else:
+            src_dict = None
     except NotImplementedError:
         src_dict = None
     tgt_dict = task.target_dictionary

@@ -277,8 +277,8 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             new_lengths = [len(p) for p in batch_predicted]
             new_maxlen = max(new_lengths)
             weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=x.dtype)
-            processed_inputs_cnt = 0
             for b_idx, pred in enumerate(batch_predicted):
+                processed_inputs_cnt = 0
                 for t_idx, same in enumerate(pred):
                     new_processed_inputs_cnt = processed_inputs_cnt + same[1]
                     weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = 1.0 / same[1]
