@@ -63,6 +63,9 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
                             help='Initialization value for variance')
         parser.add_argument('--ctc-compress-out',  action='store_true', default=False,
                             help="If set, compress the CTC output based on predictions")
+        parser.add_argument('--ctc-compress-strategy', type=str, default="avg",
+                            choices=['avg', 'weighted', 'softmax'],
+                            help="Strategy to use when compressing CTC output")
         parser.add_argument('--freeze-pretrained', action='store_true',
                             help='if set, all params loaded from the pretrained model are freezed')
 
@@ -185,6 +188,7 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             self.ctc_fc = nn.Linear(args.encoder_embed_dim, len(dictionary))
             assert args.criterion == "ctc_multi_loss"
             self.ctc_layer = args.ctc_encoder_layer
+            self.ctc_compress_method = getattr(CTCCompressStrategy, args.ctc_compress_strategy)
 
     def forward(
         self,
@@ -275,15 +279,7 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
                 batch_predicted.append([(p[0], len(list(p[1]))) for p in groupby(predicted)])
 
             new_lengths = [len(p) for p in batch_predicted]
-            new_maxlen = max(new_lengths)
-            weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=x.dtype)
-            for b_idx, pred in enumerate(batch_predicted):
-                processed_inputs_cnt = 0
-                for t_idx, same in enumerate(pred):
-                    new_processed_inputs_cnt = processed_inputs_cnt + same[1]
-                    weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = 1.0 / same[1]
-                    processed_inputs_cnt = new_processed_inputs_cnt
-            weights_matrix = weights_matrix.to(x.device)
+            weights_matrix = self.ctc_compress_method(prob_ctc, batch_predicted, new_lengths, x.dtype, x.device)
         # x is T x B x C -> B x C x T; weights_matrix is B x T x T'
         compressed_output = x.permute(1, 2, 0).bmm(weights_matrix)  # B x C x T'
         return x_ctc, compressed_output.permute(2, 0, 1), src_lengths.new(new_lengths)
@@ -369,6 +365,35 @@ def LayerNorm(embedding_dim):
     nn.init.constant_(m.weight, 1)
     nn.init.constant_(m.bias, 0)
     return m
+
+
+class CTCCompressStrategy:
+    @staticmethod
+    def avg(prob_ctc, predicted, new_lengths, dtype, device):
+        new_maxlen = max(new_lengths)
+        weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=dtype)
+        for b_idx, pred in enumerate(predicted):
+            processed_inputs_cnt = 0
+            for t_idx, same in enumerate(pred):
+                new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = 1.0 / same[1]
+                processed_inputs_cnt = new_processed_inputs_cnt
+        return weights_matrix.to(device)
+
+    @staticmethod
+    def weighted(prob_ctc, predicted, new_lengths, dtype, device):
+        new_maxlen = max(new_lengths)
+        weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=dtype, device=device)
+        for b_idx, pred in enumerate(predicted):
+            processed_inputs_cnt = 0
+            for t_idx, same in enumerate(pred):
+                new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                # Get the probabilities of the prediction for the different time steps as weight
+                weights = prob_ctc[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, same[0]]
+                weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = \
+                    weights / weights.sum()
+                processed_inputs_cnt = new_processed_inputs_cnt
+        return weights_matrix
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer')
