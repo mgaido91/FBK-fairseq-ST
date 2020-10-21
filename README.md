@@ -9,7 +9,8 @@ If you use this code, please consider citing the related paper.
 The repository contains the code for:
 
 <ul>
-    <li>Contextualized Translation of Automatically Segmented Speech</li>
+    <li>M. Gaido et al., "Contextualized Translation of Automatically Segmented Speech", INTERSPEECH 2020</li>
+    <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
 </ul>
 
 
