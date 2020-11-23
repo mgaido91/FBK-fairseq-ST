@@ -13,6 +13,19 @@ The repository contains the code for:
     <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
 </ul>
 
+```bibtex
+@inproceedings{Gaido2020,
+  author={Gaido, Marco and Di Gangi, Mattia A. and Negri, Matteo and Cettolo, Mauro and Turchi, Marco},
+  title={{Contextualized Translation of Automatically Segmented Speech}},
+  year=2020,
+  month=oct,
+  booktitle={Proc. of Interspeech 2020},
+  pages={1471--1475},
+  doi={10.21437/Interspeech.2020-2860},
+  url={http://dx.doi.org/10.21437/Interspeech.2020-2860}
+}
+```
+
 
 Below, there is the original README file.
 
