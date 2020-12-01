@@ -159,12 +159,14 @@ class LanguagePairDataset(FairseqDataset):
         shuffle=True, input_feeding=True,
         remove_eos_from_source=False, append_eos_to_target=False,
         align_dataset=None,
-        append_bos=False
+        append_bos=False, eos=None
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
             assert src_dict.eos() == tgt_dict.eos()
             assert src_dict.unk() == tgt_dict.unk()
+        if tgt is not None:
+            assert len(src) == len(tgt), "Source and target must contain the same number of examples"
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
@@ -183,6 +185,7 @@ class LanguagePairDataset(FairseqDataset):
         if self.align_dataset is not None:
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
         self.append_bos = append_bos
+        self.eos = (eos if eos is not None else src_dict.eos())
 
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
@@ -252,7 +255,7 @@ class LanguagePairDataset(FairseqDataset):
                   on the left if *left_pad_target* is ``True``.
         """
         return collate(
-            samples, pad_idx=self.src_dict.pad(), eos_idx=self.src_dict.eos(),
+            samples, pad_idx=self.src_dict.pad(), eos_idx=self.eos,
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,
             input_feeding=self.input_feeding,
         )

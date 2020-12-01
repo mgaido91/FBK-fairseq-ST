@@ -6,19 +6,23 @@ import copy
 
 class TimeStretch(nn.Module):
 
-    def __init__(self, w, low, high):
+    def __init__(self, rate, w, low, high):
         super().__init__()
         if w < 1:
             raise ValueError("w must be greater than 1")
         self.w = w
         self.low = low
         self.high = high
+        self.rate = rate
 
     def forward(self, batch):
         new_batch = copy.deepcopy(batch)
         tokens, lengths = [], []
         for elem, length in zip(batch['net_input']['src_tokens'], batch['net_input']['src_lengths']):
-            tokens += [time_stretch_seq(elem[:length, :], self.w, self.low, self.high)]
+            if random.random() < self.rate:
+                tokens += [time_stretch_seq(elem[:length, :], self.w, self.low, self.high)]
+            else:
+                tokens += [elem[:length, :]]
             lengths += [tokens[-1].size(0)]
 
         frames = torch.zeros([len(lengths), max(lengths), tokens[0].size(1)], dtype=torch.float32)
