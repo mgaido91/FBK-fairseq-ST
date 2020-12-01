@@ -1,6 +1,5 @@
 # FBK-fairseq-ST
 
-<<<<<<< HEAD
 This repository is a fork of
 https://github.com/pytorch/fairseq containing
 additional code used for our papers.
