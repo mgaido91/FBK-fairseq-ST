@@ -1,3 +1,32 @@
+# FBK-fairseq-ST
+
+This repository is a fork of https://github.com/pytorch/fairseq containing additional code used for our papers. Most of our code is in the examples/speech_recognition folder.
+
+If you use this code, please consider citing the related paper. The repository contains the code for:
+
+ - M. Gaido, B. Savoldi et al., "Breeding Gender-aware Direct Speech Translation Systems", COLING2020
+
+```bibtex
+@inproceedings{gaido-etal-2020-breeding,
+    title = "Breeding Gender-aware Direct Speech Translation Systems",
+    author = "Gaido, Marco  and
+      Savoldi, Beatrice  and
+      Bentivogli, Luisa  and
+      Negri, Matteo  and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 28th International Conference on Computational Linguistics",
+    month = dec,
+    year = "2020",
+    address = "Barcelona, Spain (Online)",
+    publisher = "International Committee on Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/2020.coling-main.350",
+    pages = "3951--3964",
+}
+```
+
+Below, there is the original README file.
+
+
 <p align="center">
   <img src="fairseq_logo.png" width="150">
   <br />
