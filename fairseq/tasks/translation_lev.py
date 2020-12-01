@@ -10,7 +10,7 @@ import torch
 from fairseq.utils import new_arange
 from fairseq.tasks import register_task
 from fairseq.tasks.translation import TranslationTask, load_langpair_dataset
-
+from fairseq import utils
 
 @register_task('translation_lev')
 class TranslationLevenshteinTask(TranslationTask):
@@ -29,15 +29,15 @@ class TranslationLevenshteinTask(TranslationTask):
             default='random_delete',
             choices=['random_delete', 'random_mask', 'no_noise', 'full_mask'])
 
-    def load_dataset(self, split, epoch=0, combine=False, **kwargs):
+    def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         """Load a given dataset split.
 
         Args:
             split (str): name of the split (e.g., train, valid, test)
         """
-        paths = self.args.data.split(os.pathsep)
+        paths = utils.split_paths(self.args.data)
         assert len(paths) > 0
-        data_path = paths[epoch % len(paths)]
+        data_path = paths[(epoch - 1) % len(paths)]
 
         # infer langcode
         src, tgt = self.args.source_lang, self.args.target_lang
@@ -126,7 +126,8 @@ class TranslationLevenshteinTask(TranslationTask):
         else:
             raise NotImplementedError
 
-    def build_generator(self, args):
+    def build_generator(self, models, args):
+        # add models input to match the API for SequenceGenerator
         from fairseq.iterative_refinement_generator import IterativeRefinementGenerator
         return IterativeRefinementGenerator(
             self.target_dictionary,
@@ -143,6 +144,7 @@ class TranslationLevenshteinTask(TranslationTask):
                    model,
                    criterion,
                    optimizer,
+                   update_num,
                    ignore_grad=False):
         model.train()
         sample['prev_target'] = self.inject_noise(sample['target'])

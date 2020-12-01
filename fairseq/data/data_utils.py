@@ -38,7 +38,6 @@ def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_be
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()
         if move_eos_to_beginning:
-            assert src[-1] == eos_idx
             dst[0] = eos_idx
             dst[1:] = src[:-1]
         else:
@@ -191,7 +190,7 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
             'skip this example with --skip-invalid-size-inputs-valid-test'
         ).format(ignored[0], dataset.size(ignored[0]), max_positions))
     if len(ignored) > 0:
-        logger.warn((
+        logger.warning((
             '{} samples have invalid sizes and will be skipped, '
             'max_positions={}, first few sample ids={}'
         ).format(len(ignored), max_positions, ignored[:10]))

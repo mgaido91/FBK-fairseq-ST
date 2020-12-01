@@ -27,7 +27,9 @@ def get_fused_adam_class():
         try:
             # fallback to the newer interface
             from apex.optimizers import FusedAdam as _FusedAdam  # noqa
-            return FusedAdamV2
+            from apex.multi_tensor_apply import multi_tensor_applier
+            if multi_tensor_applier.available:
+                return FusedAdamV2
         except ImportError:
             pass
     return None
@@ -132,13 +134,13 @@ class FusedAdamV1(torch.optim.Optimizer):
 
             # compute combined scale factor for this group
             combined_scale = scale
-            if group['max_grad_norm'] > 0:
+            if group.get('max_grad_norm', 0) > 0:
                 # norm is in fact norm*scale
                 clip = ((grad_norm / scale) + 1e-6) / group['max_grad_norm']
                 if clip > 1:
                     combined_scale = clip * scale
 
-            bias_correction = 1 if group['bias_correction'] else 0
+            bias_correction = 1 if group.get('bias_correction', 1) else 0
 
             for p, grad in zip(group['params'], grads_this_group):
                 # note: p.grad should not ever be set for correct
@@ -176,20 +178,21 @@ class FusedAdamV1(torch.optim.Optimizer):
                 state['step'] += 1
 
                 out_p = p.data
-                fused_adam_cuda.adam(p_data_fp32,
-                                     out_p,
-                                     exp_avg,
-                                     exp_avg_sq,
-                                     grad,
-                                     group['lr'],
-                                     beta1,
-                                     beta2,
-                                     group['eps'],
-                                     combined_scale,
-                                     state['step'],
-                                     self.eps_mode,
-                                     bias_correction,
-                                     group['weight_decay'])
+                with torch.cuda.device(p.device):
+                    fused_adam_cuda.adam(p_data_fp32,
+                                         out_p,
+                                         exp_avg,
+                                         exp_avg_sq,
+                                         grad,
+                                         group['lr'],
+                                         beta1,
+                                         beta2,
+                                         group['eps'],
+                                         combined_scale,
+                                         state['step'],
+                                         self.eps_mode,
+                                         bias_correction,
+                                         group['weight_decay'])
 
         return loss
 
@@ -254,6 +257,9 @@ try:
                         state['exp_avg'] = torch.zeros_like(p.data, dtype=torch.float)
                         # Exponential moving average of squared gradient values
                         state['exp_avg_sq'] = torch.zeros_like(p.data, dtype=torch.float)
+                    else:
+                        state['exp_avg'] = state['exp_avg'].to(device=p.data.device, dtype=torch.float)
+                        state['exp_avg_sq'] = state['exp_avg_sq'].to(device=p.data.device, dtype=torch.float)
 
                     if p.dtype == torch.float16:
                         g_16.append(p.grad.data.float())
@@ -269,32 +275,33 @@ try:
                     else:
                         raise RuntimeError('FusedAdam only support fp16 and fp32.')
 
-                if(len(g_16) > 0):
-                    multi_tensor_applier(self.multi_tensor_adam,
-                                         self._dummy_overflow_buf,
-                                         [g_16, p_16, m_16, v_16],
-                                         group['lr'],
-                                         beta1,
-                                         beta2,
-                                         group['eps'],
-                                         group['step'],
-                                         self.adam_w_mode,
-                                         bias_correction,
-                                         group['weight_decay'])
-                    for orig_p, p in zip(orig_p_16, p_16):
-                        orig_p.copy_(p.data)
-                if(len(g_32) > 0):
-                    multi_tensor_applier(self.multi_tensor_adam,
-                                         self._dummy_overflow_buf,
-                                         [g_32, p_32, m_32, v_32],
-                                         group['lr'],
-                                         beta1,
-                                         beta2,
-                                         group['eps'],
-                                         group['step'],
-                                         self.adam_w_mode,
-                                         bias_correction,
-                                         group['weight_decay'])
+                with torch.cuda.device(p.device):
+                    if(len(g_16) > 0):
+                        multi_tensor_applier(self.multi_tensor_adam,
+                                             self._dummy_overflow_buf,
+                                             [g_16, p_16, m_16, v_16],
+                                             group['lr'],
+                                             beta1,
+                                             beta2,
+                                             group['eps'],
+                                             group['step'],
+                                             self.adam_w_mode,
+                                             bias_correction,
+                                             group['weight_decay'])
+                        for orig_p, p in zip(orig_p_16, p_16):
+                            orig_p.copy_(p.data)
+                    if(len(g_32) > 0):
+                        multi_tensor_applier(self.multi_tensor_adam,
+                                             self._dummy_overflow_buf,
+                                             [g_32, p_32, m_32, v_32],
+                                             group['lr'],
+                                             beta1,
+                                             beta2,
+                                             group['eps'],
+                                             group['step'],
+                                             self.adam_w_mode,
+                                             bias_correction,
+                                             group['weight_decay'])
 
             return loss
 except ImportError:
