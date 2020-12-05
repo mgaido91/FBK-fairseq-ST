@@ -63,10 +63,19 @@ class ConvolutionalTransformerDualDecoder(MultiTaskModel):
         return ConvolutionalTransformerDualDecoder(encoder, decoder, auxiliary_decoder)
 
     # In "speech_translation_with_transcription" the transcripts are read into
-    # "encoder_target". Not the most elegant solution, but it allows
+    # "transcript_target". Not the most elegant solution, but it allows
     # compatibility with existing code.
     def get_auxiliary_target(self, sample, auxiliary_output):
-        return sample["encoder_target"]
+        return sample["transcript_target"]
+
+    def forward(self, src_tokens, src_lengths, prev_output_tokens, transcript_prev_output_tokens, **kwargs):
+        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths, **kwargs)
+        decoder_out = self.decoder(
+            prev_output_tokens, encoder_out=encoder_out, **kwargs
+        )
+        auxiliary_out = self.auxiliary_decoder(
+            transcript_prev_output_tokens, encoder_out=encoder_out, **kwargs)
+        return decoder_out, auxiliary_out
 
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):

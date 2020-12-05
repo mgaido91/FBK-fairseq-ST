@@ -134,13 +134,13 @@ class CTCMultiLoss(FairseqCriterion):
 
     def forward(self, model, sample, reduce=True, log_probs=True):
         decoder_out, encoder_out = self.ctc_aware_model(model, **sample["net_input"])
-        encoder_fake_model = FakeEncoderModel(model.encoder, encoder_out, sample["encoder_target"])
+        encoder_fake_model = FakeEncoderModel(model.encoder, encoder_out, sample["transcript_target"])
         decoder_fake_model = FakeDecoderModel(model, decoder_out, sample["target"])
         encoder_sample = {
             "net_input": sample["net_input"],
-            "target": sample["encoder_target"],
-            "target_lengths": sample["encoder_target_lengths"],
-            "ntokens": sum(sample["encoder_target_lengths"]).item()
+            "target": sample["transcript_target"],
+            "target_lengths": sample["transcript_target_lengths"],
+            "ntokens": sum(sample["transcript_target_lengths"]).item()
         }
         ctc_loss, ctc_sample_size, ctc_logging_output = self.ctc_criterion(
             encoder_fake_model, encoder_sample, reduce=reduce, log_probs=log_probs)

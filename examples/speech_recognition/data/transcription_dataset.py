@@ -13,7 +13,7 @@ class TranscriptionWrapperDataset(FairseqDataset):
 
     def __getitem__(self, index):
         item = self.tgt_dataset[index]
-        item['encoder_target'] = self.transcription_dataset[index]
+        item['transcript_target'] = self.transcription_dataset[index]
         return item
 
     def __len__(self):
@@ -36,22 +36,31 @@ class TranscriptionWrapperDataset(FairseqDataset):
         transcr_lens = []
         for i, s in enumerate(samples):
             transcriptions_map[s['id']] = i
-            transcr_lens.append(s['encoder_target'].shape[0])
+            transcr_lens.append(s['transcript_target'].shape[0])
         sort_order = []
         for s_id in batch['id'].tolist():
             sort_order.append(transcriptions_map[s_id])
         sort_order = torch.tensor(sort_order)
-        encoder_target = fairseq_data_utils.collate_tokens(
-            [s["encoder_target"] for s in samples],
+        transcript_target = fairseq_data_utils.collate_tokens(
+            [s["transcript_target"] for s in samples],
             self.transcription_dict.pad(),
             self.transcription_dict.eos(),
             left_pad=False,
             move_eos_to_beginning=False,
         )
-        encoder_target = encoder_target.index_select(0, sort_order)
-        encoder_target_lengths = torch.LongTensor(transcr_lens).index_select(0, sort_order)
-        batch['encoder_target'] = encoder_target
-        batch['encoder_target_lengths'] = encoder_target_lengths
+        transcr_prev_output_tokens = fairseq_data_utils.collate_tokens(
+            [s["transcript_target"] for s in samples],
+            self.transcription_dict.pad(),
+            self.transcription_dict.eos(),
+            left_pad=False,
+            move_eos_to_beginning=True,
+        )
+        transcript_target = transcript_target.index_select(0, sort_order)
+        transcript_target_lengths = torch.LongTensor(transcr_lens).index_select(0, sort_order)
+        transcr_prev_output_tokens = transcr_prev_output_tokens.index_select(0, sort_order)
+        batch['transcript_target'] = transcript_target
+        batch['transcript_target_lengths'] = transcript_target_lengths
+        batch['net_input']['transcript_prev_output_tokens'] = transcr_prev_output_tokens
         return batch
 
     def num_tokens(self, index):
