@@ -7,10 +7,11 @@ from fairseq.criterions.label_smoothed_cross_entropy import label_smoothed_nll_l
 
 
 @register_criterion("cross_entropy_dualdecoder")
-class CrossEntropyMultitask(FairseqCriterion):
+class CrossEntropyDualDecoder(FairseqCriterion):
     def __init__(self, args, task):
         super().__init__(task)
         self.eps = args.label_smoothing
+        self.sentence_avg = args.sentence_avg
         self.auxiliary_loss_weight = args.auxiliary_loss_weight
         self.primary_loss_weight = args.primary_loss_weight
 
