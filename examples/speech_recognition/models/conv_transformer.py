@@ -11,7 +11,9 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, Dict
+
+from torch import Tensor
 
 from examples.speech_recognition.modules.conv_attention_2d import ConvAttention2D
 from examples.speech_recognition.modules.conv_transformer_layer import ConvTransformerEncoderLayer
@@ -229,6 +231,15 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
     @property
     def output_batch_first(self):
         return False
+
+    @torch.jit.unused
+    def forward_non_torchscript(self, net_input: Dict[str, Tensor]):
+        encoder_input = {
+            k: v
+            for k, v in net_input.items()
+            if k not in ["prev_output_tokens", "transcript_prev_output_tokens"]
+        }
+        return self.forward(**encoder_input)
 
     def reorder_encoder_out(self, encoder_out, new_order):
         """
