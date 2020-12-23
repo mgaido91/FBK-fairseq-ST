@@ -46,6 +46,7 @@ class TriangleTransformerDecoderLayer(TransformerDecoderLayer):
             qn_block_size=self.quant_noise_block_size,
         )
         self.aux_decoder_attn_layer_norm = LayerNorm(self.embed_dim, export=False)
+        self.fc_concat = nn.Linear(self.embed_dim * 2, self.embed_dim)
 
     def forward(
         self,
@@ -135,6 +136,8 @@ class TriangleTransformerDecoderLayer(TransformerDecoderLayer):
             residual = x
             if self.normalize_before:
                 x = self.encoder_attn_layer_norm(x)
+            x_1 = x
+            x_2 = x
             if prev_attn_state is not None:
                 prev_key, prev_value = prev_attn_state[:2]
                 saved_state: Dict[str, Optional[Tensor]] = {
@@ -146,8 +149,8 @@ class TriangleTransformerDecoderLayer(TransformerDecoderLayer):
                 assert incremental_state is not None
                 self.encoder_attn._set_input_buffer(incremental_state, saved_state)
 
-            x, enc_attn = self.encoder_attn(
-                query=x,
+            x_1, enc_attn = self.encoder_attn(
+                query=x_1,
                 key=encoder_out,
                 value=encoder_out,
                 key_padding_mask=encoder_padding_mask,
@@ -156,17 +159,11 @@ class TriangleTransformerDecoderLayer(TransformerDecoderLayer):
                 need_weights=need_attn or (not self.training and self.need_attn),
                 need_head_weights=need_head_weights,
             )
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            x = residual + x
-            if not self.normalize_before:
-                x = self.encoder_attn_layer_norm(x)
+            x_1 = F.dropout(x_1, p=self.dropout, training=self.training)
 
             # Here we compute the cross attention with the output of the auxiliary decoder
-            residual = x
-            if self.normalize_before:
-                x = self.aux_decoder_attn_layer_norm(x)
-            x, aux_dec_attn = self.aux_decoder_attn(
-                query=x,
+            x_2, aux_dec_attn = self.aux_decoder_attn(
+                query=x_2,
                 key=aux_decoder_out,
                 value=aux_decoder_out,
                 key_padding_mask=aux_decoder_padding_mask,
@@ -175,7 +172,9 @@ class TriangleTransformerDecoderLayer(TransformerDecoderLayer):
                 need_weights=need_attn or (not self.training and self.need_attn),
                 need_head_weights=need_head_weights,
             )
-            x = F.dropout(x, p=self.dropout, training=self.training)
+            x_2 = F.dropout(x_2, p=self.dropout, training=self.training)
+
+            x = self.fc_concat(torch.cat((x_1, x_2), dim=-1))
             x = residual + x
             if not self.normalize_before:
                 x = self.aux_decoder_attn_layer_norm(x)
