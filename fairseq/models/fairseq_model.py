@@ -81,6 +81,12 @@ class BaseFairseqModel(nn.Module):
         """Maximum length supported by the model."""
         return None
 
+    def raw_state_dict_upgrade(self, state_dict):
+        """Upgrade old state dicts to work with newer code, allowing changes
+        among different saved components, such as models and criterions,
+        """
+        return state_dict
+
     def load_state_dict(self, state_dict, strict=True, args=None):
         """Copies parameters and buffers from *state_dict* into this module and
         its descendants.

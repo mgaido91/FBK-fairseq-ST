@@ -24,19 +24,24 @@ class CTCEncoderWrapperModel(BaseFairseqModel):
         decoder_out = model.decoder(
             prev_output_tokens, encoder_out=encoder_out, **kwargs
         )
-        if isinstance(encoder_out, dict):
-            encoder_states = encoder_out["encoder_states"]
-            encoder_padding_mask = encoder_out["encoder_padding_mask"]
-        elif hasattr(encoder_out, "encoder_states"):
-            encoder_states = encoder_out.encoder_states
-            encoder_padding_mask = encoder_out.encoder_padding_mask
+        if hasattr(encoder_out, "ctc_out"):
+            ctc_features = encoder_out.ctc_out
+            encoder_padding_mask = encoder_out.ctc_padding_mask
         else:
-            raise NotImplementedError("Encoder output not supported by CTC multi loss")
+            if isinstance(encoder_out, dict):
+                encoder_states = encoder_out["encoder_states"]
+                encoder_padding_mask = encoder_out["encoder_padding_mask"]
+            elif hasattr(encoder_out, "encoder_states"):
+                encoder_states = encoder_out.encoder_states
+                encoder_padding_mask = encoder_out.encoder_padding_mask
+            else:
+                raise NotImplementedError("Encoder output not supported by CTC multi loss")
+            ctc_features = self.fc_out(encoder_states[self.ctc_encoder_layer - 1])
         if encoder_padding_mask is not None:
             encoder_padding_mask = encoder_padding_mask.t()  # B x T => T x B
-        ctc_features = encoder_states[self.ctc_encoder_layer - 1]
+
         return decoder_out, {
-            "encoder_out": self.fc_out(ctc_features),
+            "encoder_out": ctc_features,
             "encoder_padding_mask": encoder_padding_mask
         }
 

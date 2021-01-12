@@ -4,14 +4,14 @@
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
-
-
+import logging
 import math
+from itertools import groupby
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, NamedTuple
 
 from examples.speech_recognition.modules.conv_attention_2d import ConvAttention2D
 from examples.speech_recognition.modules.conv_transformer_layer import ConvTransformerEncoderLayer
@@ -19,6 +19,15 @@ from examples.speech_recognition.modules.positional_embedding_audio import Posit
 from fairseq import utils
 from fairseq.models import register_model, FairseqEncoderDecoderModel, fconv, register_model_architecture, FairseqEncoder
 from fairseq.models.transformer import TransformerDecoder, EncoderOut, TransformerModel
+
+logger = logging.getLogger(__name__)
+
+
+CTCAwareEncoderOut = NamedTuple(
+    'CTCAwareEncoderOut',
+    list(EncoderOut._field_types.items()) + [
+        ("ctc_out", torch.Tensor),
+        ("ctc_padding_mask", torch.Tensor)],)
 
 
 @register_model('conv_transformer')
@@ -52,6 +61,13 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
                             help='Add distance penalty to the encoder')
         parser.add_argument('--init-variance', type=float, default=1.0,
                             help='Initialization value for variance')
+        parser.add_argument('--ctc-compress-out',  action='store_true', default=False,
+                            help="If set, compress the CTC output based on predictions")
+        parser.add_argument('--ctc-compress-strategy', type=str, default="avg",
+                            choices=['avg', 'weighted', 'softmax'],
+                            help="Strategy to use when compressing CTC output")
+        parser.add_argument('--freeze-pretrained', action='store_true',
+                            help='if set, all params loaded from the pretrained model are freezed')
 
     @classmethod
     def build_model(cls, args, task):
@@ -80,9 +96,27 @@ class ConvolutionalTransformerModel(FairseqEncoderDecoderModel):
         decoder_embed_tokens = build_embedding(
             tgt_dict, args.decoder_embed_dim, args.decoder_embed_path)
         encoder = ConvolutionalTransformerEncoder(
-            args, tgt_dict, audio_features=args.input_feat_per_channel)
+            args, src_dict if src_dict is not None else tgt_dict, audio_features=args.input_feat_per_channel)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
         return ConvolutionalTransformerModel(encoder, decoder)
+
+    def raw_state_dict_upgrade(self, state_dict):
+        if self.encoder.ctc_compress_out and "encoder.ctc_fc.weight" not in state_dict["model"]:
+            if "ctc_aware_model.fc_out.weight" in state_dict["criterion"]:
+                state_dict["model"]["encoder.ctc_fc.weight"] = \
+                    state_dict["criterion"]["ctc_aware_model.fc_out.weight"]
+                state_dict["model"]["encoder.ctc_fc.bias"] = \
+                    state_dict["criterion"]["ctc_aware_model.fc_out.bias"]
+        return state_dict
+
+    def load_state_dict(self, state_dict, strict=True, args=None):
+        loaded_model = super().load_state_dict(state_dict, strict)
+        if getattr(args, "freeze_pretrained", False):
+            logger.info("Freezing pretrained weights")
+            for p_name, p_val in loaded_model.named_parameters():
+                if p_name in state_dict["model"]:
+                    p_val.requires_grad = False
+        return loaded_model
 
 
 class ConvolutionalTransformerEncoder(FairseqEncoder):
@@ -149,6 +183,12 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             self.layernorm_embedding = LayerNorm(args.encoder_embed_dim)
         else:
             self.layernorm_embedding = None
+        self.ctc_compress_out = args.ctc_compress_out
+        if self.ctc_compress_out:
+            self.ctc_fc = nn.Linear(args.encoder_embed_dim, len(dictionary))
+            assert args.criterion == "ctc_multi_loss"
+            self.ctc_layer = args.ctc_encoder_layer
+            self.ctc_compress_method = getattr(CTCCompressStrategy, args.ctc_compress_strategy)
 
     def forward(
         self,
@@ -194,11 +234,16 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
         encoder_states = [] if return_all_hiddens else None
 
         # encoder layers
-        for layer in self.layers:
+        for l_idx, layer in enumerate(self.layers):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = torch.empty(1).uniform_()
             if not self.training or (dropout_probability > self.encoder_layerdrop):
                 x = layer(x, encoder_padding_mask)
+                if self.ctc_compress_out and self.ctc_layer == l_idx + 1:
+                    ctc_padding_mask = encoder_padding_mask
+                    x_ctc, x, src_lengths = self.average_same_ctc_features(x, src_lengths)
+                    encoder_padding_mask = self.create_mask(src_lengths)
+
                 if return_all_hiddens:
                     assert encoder_states is not None
                     encoder_states.append(x)
@@ -207,15 +252,41 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
             x = self.layer_norm(x)
             if return_all_hiddens:
                 encoder_states[-1] = x
+        if self.ctc_compress_out:
+            return CTCAwareEncoderOut(
+                encoder_out=x,  # T x B x C
+                encoder_padding_mask=encoder_padding_mask,  # B x T
+                encoder_embedding=None,
+                encoder_states=encoder_states,  # List[T x B x C]
+                src_tokens=src_tokens,
+                src_lengths=src_lengths,
+                ctc_out=x_ctc,  # T x B x D
+                ctc_padding_mask=ctc_padding_mask
+            )
+        else:
+            return EncoderOut(
+                encoder_out=x,  # T x B x C
+                encoder_padding_mask=encoder_padding_mask,  # B x T
+                encoder_embedding=None,
+                encoder_states=encoder_states,  # List[T x B x C]
+                src_tokens=src_tokens,
+                src_lengths=src_lengths,
+            )
 
-        return EncoderOut(
-            encoder_out=x,  # T x B x C
-            encoder_padding_mask=encoder_padding_mask,  # B x T
-            encoder_embedding=None,
-            encoder_states=encoder_states,  # List[T x B x C]
-            src_tokens=src_tokens,
-            src_lengths=src_lengths
-        )
+    def average_same_ctc_features(self, x, src_lengths):
+        x_ctc = self.ctc_fc(x)
+        with torch.no_grad():
+            batch_predicted = []
+            prob_ctc = F.softmax(x_ctc, dim=-1).transpose(0, 1)  # from T x B x D to B x T x D
+            for b in range(prob_ctc.shape[0]):
+                predicted = prob_ctc[b][: src_lengths[b]].argmax(-1).tolist()
+                batch_predicted.append([(p[0], len(list(p[1]))) for p in groupby(predicted)])
+
+            new_lengths = [len(p) for p in batch_predicted]
+            weights_matrix = self.ctc_compress_method(prob_ctc, batch_predicted, new_lengths, x.dtype, x.device)
+        # x is T x B x C -> B x C x T; weights_matrix is B x T x T'
+        compressed_output = x.permute(1, 2, 0).bmm(weights_matrix)  # B x C x T'
+        return x_ctc, compressed_output.permute(2, 0, 1), src_lengths.new(new_lengths)
 
     def create_mask(self, lengths):
         max_len = max(lengths)
@@ -298,6 +369,50 @@ def LayerNorm(embedding_dim):
     nn.init.constant_(m.weight, 1)
     nn.init.constant_(m.bias, 0)
     return m
+
+
+class CTCCompressStrategy:
+    @staticmethod
+    def avg(prob_ctc, predicted, new_lengths, dtype, device):
+        new_maxlen = max(new_lengths)
+        weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=dtype)
+        for b_idx, pred in enumerate(predicted):
+            processed_inputs_cnt = 0
+            for t_idx, same in enumerate(pred):
+                new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = 1.0 / same[1]
+                processed_inputs_cnt = new_processed_inputs_cnt
+        return weights_matrix.to(device)
+
+    @staticmethod
+    def weighted(prob_ctc, predicted, new_lengths, dtype, device):
+        new_maxlen = max(new_lengths)
+        weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=dtype, device=device)
+        for b_idx, pred in enumerate(predicted):
+            processed_inputs_cnt = 0
+            for t_idx, same in enumerate(pred):
+                new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                # Get the probabilities of the prediction for the different time steps as weight
+                weights = prob_ctc[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, same[0]]
+                weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = \
+                    weights / weights.sum()
+                processed_inputs_cnt = new_processed_inputs_cnt
+        return weights_matrix
+
+    @staticmethod
+    def softmax(prob_ctc, predicted, new_lengths, dtype, device):
+        new_maxlen = max(new_lengths)
+        weights_matrix = torch.zeros((prob_ctc.shape[0], prob_ctc.shape[1], new_maxlen), dtype=dtype, device=device)
+        for b_idx, pred in enumerate(predicted):
+            processed_inputs_cnt = 0
+            for t_idx, same in enumerate(pred):
+                new_processed_inputs_cnt = processed_inputs_cnt + same[1]
+                # Get the probabilities of the prediction for the different time steps as weight
+                weights = F.softmax(prob_ctc[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, same[0]])
+                weights_matrix[b_idx, processed_inputs_cnt:new_processed_inputs_cnt, t_idx] = \
+                    weights / weights.sum()
+                processed_inputs_cnt = new_processed_inputs_cnt
+        return weights_matrix
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer')

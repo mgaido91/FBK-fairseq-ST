@@ -9,6 +9,7 @@ If you use this code, please consider citing the related paper.
 The repository contains the code for:
 
 <ul>
+    <li>M. Gaido et al., "CTC-based Compression for Direct Speech Translation", EACL 2021</li>
     <li>M. Gaido, B. Savoldi et al., "Breeding Gender-aware Direct Speech Translation Systems", COLING 2020</li>
     <li>M. Gaido et al., "Contextualized Translation of Automatically Segmented Speech", INTERSPEECH 2020</li>
     <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
@@ -42,6 +43,43 @@ The repository contains the code for:
   doi={10.21437/Interspeech.2020-2860},
   url={http://dx.doi.org/10.21437/Interspeech.2020-2860}
 }
+```
+
+## CTC Compression
+
+The script used to run the experiments for the EACL 2021 paper is the following:
+
+```bash
+save_dir=$1
+lang=$2
+source_t=$3
+compress_layer=$4
+
+python train.py /datadrive/data/corpora/ctccompress/en-$lang/ \
+    -s $source_t -t $lang --skip-normalization --user-dir examples/speech_recognition \
+    --clip-norm 20 \
+    --ddp-backend=no_c10d \
+    --max-sentences 8 \
+    --max-tokens 12000 \
+    --max-source-positions 2000 --max-target-positions 1000 \
+    --save-dir $save_dir \
+    --max-epoch 150 \
+    --min-lr 1e-09 \
+    --dropout 0.2 \
+    --lr 5e-3 --min-lr 1e-07 --reset-optimizer \
+    --lr-scheduler inverse_sqrt \
+    --warmup-updates 4000 --warmup-init-lr 3e-4 \
+    --update-freq 8 \
+    --optimizer adam --adam-betas '(0.9, 0.98)' \
+    --distance-penalty log \
+    --no-attn-2d --encoder-layers 11 --decoder-layers 4 \
+    --ctc-compress-out --ctc-encoder-layer $compress_layer \
+    --arch conv_transformer_big2 --task speech_translation_with_transcription \
+    --input-feat-per-channel 40 \
+    --skip-invalid-size-inputs-valid-test \
+    --sentence-avg \
+    --specaugment --frequency-masking-pars 13 --time-masking-pars 20 --specaugment-rate 0.5 --frequency-masking-num 2 --time-masking-num 2 \
+    --criterion ctc_multi_loss --underlying-criterion label_smoothed_cross_entropy --label-smoothing 0.1
 ```
 
 Below, there is the original README file.
