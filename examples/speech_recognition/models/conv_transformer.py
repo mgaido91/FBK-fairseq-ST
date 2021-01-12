@@ -258,6 +258,8 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
                 encoder_padding_mask=encoder_padding_mask,  # B x T
                 encoder_embedding=None,
                 encoder_states=encoder_states,  # List[T x B x C]
+                src_tokens=src_tokens,
+                src_lengths=src_lengths,
                 ctc_out=x_ctc,  # T x B x D
                 ctc_padding_mask=ctc_padding_mask
             )
@@ -267,6 +269,8 @@ class ConvolutionalTransformerEncoder(FairseqEncoder):
                 encoder_padding_mask=encoder_padding_mask,  # B x T
                 encoder_embedding=None,
                 encoder_states=encoder_states,  # List[T x B x C]
+                src_tokens=src_tokens,
+                src_lengths=src_lengths,
             )
 
     def average_same_ctc_features(self, x, src_lengths):
@@ -448,10 +452,11 @@ def base_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big')
-def speechtransformer_fbk(args):
+def speechtransformer_big(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
@@ -487,10 +492,11 @@ def speechtransformer_fbk(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_big2')
-def speechtransformer_fbk(args):
+def speechtransformer_big2(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
@@ -526,10 +532,11 @@ def speechtransformer_fbk(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)
 
 
 @register_model_architecture('conv_transformer', 'conv_transformer_giant')
-def speechtransformer_fbk(args):
+def speechtransformer_giant(args):
     args.dropout = getattr(args, 'dropout', 0.3)
     args.normalization_constant = getattr(args, 'normalization_constant', 0.5)
     args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
@@ -565,3 +572,4 @@ def speechtransformer_fbk(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.adaptive_softmax_cutoff = getattr(args, "adaptive_softmax_cutoff", None)
     args.adaptive_softmax_dropout = getattr(args, "adaptive_softmax_dropout", 0)
+    args.adaptive_input = getattr(args, "adaptive_input", False)

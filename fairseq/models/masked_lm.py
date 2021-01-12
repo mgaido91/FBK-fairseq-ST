@@ -64,10 +64,6 @@ class MaskedLMModel(BaseFairseqModel):
                             help='num encoder layers')
         parser.add_argument('--encoder-attention-heads', type=int, metavar='N',
                             help='num encoder attention heads')
-        parser.add_argument('--bias-kv', action='store_true',
-                            help='if set, adding a learnable bias kv')
-        parser.add_argument('--zero-attn', action='store_true',
-                            help='if set, pads attn with zero')
 
         # Arguments related to input and output embeddings
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',
@@ -154,8 +150,6 @@ class MaskedLMEncoder(FairseqEncoder):
             apply_bert_init=args.apply_bert_init,
             activation_fn=args.activation_fn,
             learned_pos_embedding=args.encoder_learned_pos,
-            add_bias_kv=args.bias_kv,
-            add_zero_attn=args.zero_attn,
         )
 
         self.share_input_output_embed = args.share_encoder_input_output_embed
@@ -194,7 +188,7 @@ class MaskedLMEncoder(FairseqEncoder):
                     bias=False
                 )
 
-    def forward(self, src_tokens, segment_labels=None, **unused):
+    def forward(self, src_tokens, segment_labels=None, masked_tokens=None, **unused):
         """
         Forward pass for Masked LM encoder. This first computes the token
         embedding using the token embedding matrix, position embeddings (if
@@ -224,6 +218,9 @@ class MaskedLMEncoder(FairseqEncoder):
         )
 
         x = inner_states[-1].transpose(0, 1)
+        # project masked tokens only
+        if masked_tokens is not None:
+            x = x[masked_tokens, :]
         x = self.layer_norm(self.activation_fn(self.lm_head_transform_weight(x)))
 
         pooled_output = self.pooler_activation(self.masked_lm_pooler(sentence_rep))
@@ -234,7 +231,6 @@ class MaskedLMEncoder(FairseqEncoder):
             x = F.linear(x, self.sentence_encoder.embed_tokens.weight)
         elif self.embed_out is not None:
             x = self.embed_out(x)
-
         if self.lm_output_learned_bias is not None:
             x = x + self.lm_output_learned_bias
         sentence_logits = None
@@ -279,8 +275,6 @@ def base_architecture(args):
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4096)
     args.encoder_layers = getattr(args, 'encoder_layers', 6)
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 8)
-    args.bias_kv = getattr(args, 'bias_kv', False)
-    args.zero_attn = getattr(args, 'zero_attn', False)
 
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 1024)
     args.share_encoder_input_output_embed = getattr(args, 'share_encoder_input_output_embed', False)
@@ -312,8 +306,6 @@ def bert_base_architecture(args):
 
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 12)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 3072)
-    args.bias_kv = getattr(args, 'bias_kv', False)
-    args.zero_attn = getattr(args, 'zero_attn', False)
 
     args.sentence_class_num = getattr(args, 'sentence_class_num', 2)
     args.sent_loss = getattr(args, 'sent_loss', True)
@@ -349,8 +341,6 @@ def xlm_architecture(args):
 
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 8)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4096)
-    args.bias_kv = getattr(args, 'bias_kv', False)
-    args.zero_attn = getattr(args, 'zero_attn', False)
 
     args.sent_loss = getattr(args, 'sent_loss', False)
 

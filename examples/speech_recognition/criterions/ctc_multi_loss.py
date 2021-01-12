@@ -98,7 +98,7 @@ class FakeDecoderModel(nn.Module):
 
 class BaseCTCLoss(CTCCriterion):
     def __init__(self, args, task):
-        super(CTCCriterion, self).__init__(args, task)
+        super(CTCCriterion, self).__init__(task)
         self.args = args
         self.blank_idx = task.source_dictionary.index("<ctc_blank>")
         self.pad_idx = task.source_dictionary.pad()
@@ -107,12 +107,16 @@ class BaseCTCLoss(CTCCriterion):
 @register_criterion("ctc_multi_loss")
 class CTCMultiLoss(FairseqCriterion):
     def __init__(self, args, task):
-        super().__init__(args, task)
+        super().__init__(task)
         assert task.source_dictionary is not None
         self.ctc_aware_model = CTCEncoderWrapperModel(args, task.source_dictionary)
         self.ctc_criterion = BaseCTCLoss(args, task)
         self.real_criterion = CTCMultiLoss.build_real_criterion(args, task)
         self.ctc_weight = args.ctc_weight
+
+    @classmethod
+    def build_criterion(cls, args, task):
+        return cls(args, task)
 
     @staticmethod
     def build_real_criterion(args, task):
