@@ -2,21 +2,22 @@
 # Scripts for the evaluation of accuracies on MuST-SHE.
 # If using, please consider citing:
 # - M. Gaido, B. Savoldi et al., "Breeding Gender-aware Direct Speech Translation Systems", COLING 2020
-# Version: 0.1
+# Version: 1.0
 import argparse
 import csv
 
 
-def sentence_level_scores(in_f, gender_terms_f):
+def sentence_level_scores(in_f, tsv_f):
     sentences = []
-    with open(in_f) as i_f, open(gender_terms_f) as g_f:
-        for (i_line, terms_line) in zip(i_f, g_f):
+    with open(in_f) as i_f, open(tsv_f) as t_f:
+        tsv_reader = csv.DictReader(t_f, delimiter='\t')
+        for (i_line, terms_f) in zip(i_f, tsv_reader):
             sentence_correct = 0
             sentence_wrong = 0
-            gender_marked_terms = terms_line.strip().lower().split("] [")
+            gender_marked_terms = terms_f['GENDERTERMS'].strip().lower().split(";")
             generated_terms = i_line.strip().lower().split()
             for t in gender_marked_terms:
-                term = t.strip().replace("[", "").replace("]", "").split(" :: ")[1].strip().split(", ")
+                term = t.split(" ")
                 correct_term = term[0]
                 wrong_term = term[1]
                 try:
@@ -115,8 +116,6 @@ if __name__ == '__main__':
                         help='Input file to be used to compute accuracies (it must be tokenized).')
     parser.add_argument('--tsv-definition', required=True, type=str, metavar='FILE',
                         help='TSV MuST-SHE definitions file.')
-    parser.add_argument('--gender-terms', required=True, type=str, metavar='FILE',
-                        help='File containing the gender terms for each sentence.')
     parser.add_argument('--sentence-acc', required=False, default=None, type=str, metavar='FILE',
                         help='If set, sentence level accuracies are written into this file.')
     parser.add_argument('--debug', required=False, action='store_true', default=False)
@@ -124,7 +123,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    sl_scores = sentence_level_scores(args.input, args.gender_terms)
+    sl_scores = sentence_level_scores(args.input, args.tsv_definition)
     if args.sentence_acc:
         write_sentence_acc(args.sentence_acc, sl_scores)
     scores = global_scores(sl_scores, args.tsv_definition, args.debug)
