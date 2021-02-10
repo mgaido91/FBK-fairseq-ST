@@ -14,10 +14,12 @@ def sentence_level_scores(in_f, tsv_f):
         for (i_line, terms_f) in zip(i_f, tsv_reader):
             sentence_correct = 0
             sentence_wrong = 0
+            sentence_found = 0
             gender_marked_terms = terms_f['GENDERTERMS'].strip().lower().split(";")
             generated_terms = i_line.strip().lower().split()
             for t in gender_marked_terms:
                 term = t.split(" ")
+                found = False
                 correct_term = term[0]
                 wrong_term = term[1]
                 try:
@@ -25,6 +27,7 @@ def sentence_level_scores(in_f, tsv_f):
                     # Avoid re-matching the same term two times
                     del generated_terms[pos_found]
                     sentence_correct += 1
+                    found = True
                 except ValueError:
                     pass
                 try:
@@ -32,11 +35,14 @@ def sentence_level_scores(in_f, tsv_f):
                     # Avoid re-matching the same term two times
                     del generated_terms[pos_found]
                     sentence_wrong += 1
+                    found = True
                 except ValueError:
                     pass
-
+                if found:
+                    sentence_found += 1
             sentences.append({
                 "num_terms": len(gender_marked_terms),
+                "num_terms_found": sentence_found,
                 "num_correct": sentence_correct,
                 "num_wrong": sentence_wrong})
 
@@ -46,7 +52,7 @@ def sentence_level_scores(in_f, tsv_f):
 def write_sentence_acc(out_f, sentence_scores):
     with open(out_f, 'w') as f_w:
         writer = csv.DictWriter(
-            f_w, ["num_terms", "num_correct", "num_wrong"], delimiter='\t')
+            f_w, ["num_terms", "num_terms_found", "num_correct", "num_wrong"], delimiter='\t')
         writer.writeheader()
         writer.writerows(sentence_scores)
 
@@ -59,8 +65,9 @@ def global_scores(sentence_scores, tsv_f, debug=False):
         for line in reader:
             category = line["CATEGORY"]
             if category not in category_buffers:
-                category_buffers[category] = {"num_terms": 0, "num_correct": 0, "num_wrong": 0}
+                category_buffers[category] = {"num_terms": 0, "num_correct": 0, "num_wrong": 0, "num_terms_found": 0}
             category_buffers[category]["num_terms"] += sentence_scores[i]["num_terms"]
+            category_buffers[category]["num_terms_found"] += sentence_scores[i]["num_terms_found"]
             category_buffers[category]["num_correct"] += sentence_scores[i]["num_correct"]
             category_buffers[category]["num_wrong"] += sentence_scores[i]["num_wrong"]
             i += 1
@@ -70,26 +77,31 @@ def global_scores(sentence_scores, tsv_f, debug=False):
     tot_terms = 0
     tot_found = 0
     tot_correct = 0
+    tot_wrong = 0
     for c in category_buffers:
-        found = category_buffers[c]["num_correct"] + category_buffers[c]["num_wrong"]
-        term_cov = float(found) / category_buffers[c]["num_terms"]
-        if found > 0:
-            gender_acc = float(category_buffers[c]["num_correct"]) / found
+        term_cov = float(category_buffers[c]["num_terms_found"]) / category_buffers[c]["num_terms"]
+        if category_buffers[c]["num_terms_found"] > 0:
+            gender_acc = float(category_buffers[c]["num_correct"]) / \
+                         (category_buffers[c]["num_correct"] + category_buffers[c]["num_wrong"])
         else:
             gender_acc = 0.0
         overall_scores[c] = {"term_coverage": term_cov, "gender_accuracy": gender_acc}
         if debug:
-            print("Category {}: all->{}, found->{}; correct->{}".format(
-                c, category_buffers[c]["num_terms"], found, category_buffers[c]["num_correct"]))
+            print("Category {}: all->{}, found->{}; correct->{}; wrong->{}".format(
+                c, category_buffers[c]["num_terms"],
+                category_buffers[c]["num_terms_found"],
+                category_buffers[c]["num_correct"],
+                category_buffers[c]["num_wrong"]))
         tot_terms += category_buffers[c]["num_terms"]
-        tot_found += found
+        tot_found += category_buffers[c]["num_terms_found"]
         tot_correct += category_buffers[c]["num_correct"]
+        tot_wrong += category_buffers[c]["num_wrong"]
     if debug:
-        print("Global: all->{}; found->{}; correct->{}".format(
-            tot_terms, tot_found, tot_correct))
+        print("Global: all->{}; found->{}; correct->{}; wrong->{}".format(
+            tot_terms, tot_found, tot_correct, tot_wrong))
     overall_scores["Global"] = {
         "term_coverage": tot_found / tot_terms,
-        "gender_accuracy": tot_correct / tot_found}
+        "gender_accuracy": tot_correct / (tot_correct + tot_wrong)}
     return overall_scores
 
 
