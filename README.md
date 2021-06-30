@@ -82,6 +82,79 @@ python train.py /datadrive/data/corpora/ctccompress/en-$lang/ \
     --criterion ctc_multi_loss --underlying-criterion label_smoothed_cross_entropy --label-smoothing 0.1
 ```
 
+## Preprocessing steps
+
+### 1. Generate YAML / other files
+
+You need to have a single file with all the transcripts and all the translations, one per line. In addition, you need to create a YAML file that contains for each line the corresponding audio segment. Eg. your `source1.txt` should be the first line of your `train.src` file, `target1.txt` the first line of your `train.tgt` and in `train.yaml` the first line should be:
+```
+- {duration: HOW_LONG_YOUR_FILE_IS_OR_A_VERY_LARGE_NUMBER, offset: 0.0, speaker_id: ID_OF_THE_SPEAKER_OR_NAME_OF_THE_FILE, wav: source1.wav}
+```
+
+### 2. Preprocessing text
+
+Download [moses](https://github.com/moses-smt/mosesdecoder) and preprocess both transcripts and translations with:
+
+```
+${mosesdir}normalize-punctuation.perl -l $lang < $YOUR_INPUT_FILE | ${mosesdir}tokenizer.perl -l $lang | ${mosesdir}deescape-special-chars.perl > $YOUR_INPUT_FILE.tok
+```
+
+Then, learn BPE or other subword segmentation using SentencePience or any other tool you like. After this step, create the fairseq datasets containing the textual information with
+
+```
+python FBK-fairseq-ST/preprocess.py --trainpref $YOUR_TRAIN.bpe --validpref $YOUR_DEV.bpe --testpref $YOUR_TEST.bpe --destdir $THE_DIR_WHERE_YOU_WANT_YOUR_FAIRSEQ_DATASETS -s $src_lang -t $tgt_lang --workers 1 --dataset-impl cached
+```
+
+Finally, create symbolic links to have a name that does not contain the `src_lang-tgt_lang` pattern with:
+
+```
+for f in $THE_DIR_WHERE_YOU_WANT_YOUR_FAIRSEQ_DATASETS*.$src_lang-$tgt_lang.*; do ln -s $f $(echo $f | sed 's/\.$src_lang-'$tgt_lang'\./\./g'); done
+```
+
+### 3. Preprocess audio
+
+First, extract with [XNMT](https://github.com/neulab/xnmt) the Mel filterbank features. You need to create a yaml config file like this:
+
+```
+extract-test-data: !Experiment
+  preproc: !PreprocRunner
+    overwrite: False
+    tasks:
+    - !PreprocExtract
+      in_files:
+      - $THE_YAML_YOU_GENERATED_IN_1
+      out_files:
+      - $YOUR_H5_OUTPUT_FILE.h5
+      specs: !MelFiltExtractor {}
+```
+and then you can use it with this command:
+
+```
+python xnmt/xnmt/xnmt_run_experiments.py config.yaml
+```
+
+At the end of this process, you need to preprocess the h5 dataset into a fairseq dataset, which is done with
+
+```
+python FBK-fairseq-ST/examples/speech_recognition/preprocess_audio.py --destdir $THE_DIR_WHERE_YOU_WANT_YOUR_FAIRSEQ_DATASETS --format h5 --trainpref $YOUR_H5_TRAIN_OUTPUT_FILE --validpref $YOUR_H5_DEV_OUTPUT_FILE--testpref $YOUR_H5_TEST_OUTPUT_FILE
+```
+
+After this, in your target folder you should have files like these:
+
+```
+train.src_lang.idx
+train.src_lang.bin
+train.tgt_lang.idx
+train.tgt_lang.bin
+train.npz.idx
+train.npz.bin
+...
+```
+
+And you are done with your preprocessing!
+
+
+
 Below, there is the original README file.
 
 
