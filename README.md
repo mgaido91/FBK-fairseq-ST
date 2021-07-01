@@ -5,16 +5,64 @@ https://github.com/pytorch/fairseq containing
 additional code used for our papers.
 Most of our code is in the `examples/speech_recognition` folder.
 
-If you use this code, please consider citing the related paper.
+If you use this code, please consider citing the related paper(s).
 The repository contains the code for:
 
 <ul>
+    <li>A. Karakanta et al., "Between Flexibility and Consistency: Joint Generation of Captions and Subtitles", IWSLT 2021</li>
+    <li>M. Gaido, B. Savoldi et al., "How to Split: the Effect of Word Segmentation on Gender Bias in Speech Translation", Findings of ACL 2021</li>
     <li>M. Gaido et al., "CTC-based Compression for Direct Speech Translation", EACL 2021</li>
     <li>M. Gaido, B. Savoldi et al., "Breeding Gender-aware Direct Speech Translation Systems", COLING 2020</li>
     <li>M. Gaido et al., "Contextualized Translation of Automatically Segmented Speech", INTERSPEECH 2020</li>
     <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
 </ul>
 
+```bibtex
+@inproceedings{karakanta-etal-2021-between,
+    title = "Between Flexibility and Consistency: Joint Generation of Captions and Subtitles",
+    author = "Karakanta, Alina  and
+      Gaido, Marco and
+      Negri, Matteo  and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 18th International Conference on Spoken Language Translation",
+    month = aug,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics"
+}
+```
+```bibtex
+@inproceedings{gaido-etal-2021-how-to-split,
+    title = "How to Split: the Effect of Word Segmentation on Gender Bias in Speech Translation",
+    author = "Gaido, Marco  and
+      Savoldi, Beatrice  and
+      Bentivogli, Luisa  and
+      Negri, Matteo  and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics",
+    month = aug,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics"
+}
+```
+```bibtex
+@inproceedings{gaido-etal-2021-ctc,
+    title = "{CTC}-based Compression for Direct Speech Translation",
+    author = "Gaido, Marco  and
+      Cettolo, Mauro  and
+      Negri, Matteo  and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 16th Conference of the European Chapter of the Association for Computational Linguistics: Main Volume",
+    month = apr,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/2021.eacl-main.57",
+    pages = "690--696",
+    abstract = "Previous studies demonstrated that a dynamic phone-informed compression of the input audio is beneficial for speech translation (ST). However, they required a dedicated model for phone recognition and did not test this solution for direct ST, in which a single model translates the input audio into the target language without intermediate representations. In this work, we propose the first method able to perform a dynamic compression of the input in direct ST models. In particular, we exploit the Connectionist Temporal Classification (CTC) to compress the input sequence according to its phonetic characteristics. Our experiments demonstrate that our solution brings a 1.3-1.5 BLEU improvement over a strong baseline on two language pairs (English-Italian and English-German), contextually reducing the memory footprint by more than 10{\%}.",
+}
+```
 ```bibtex
 @inproceedings{gaido-etal-2020-breeding,
     title = "Breeding Gender-aware Direct Speech Translation Systems",
