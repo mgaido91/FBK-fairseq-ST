@@ -9,6 +9,7 @@ If you use this code, please consider citing the related paper(s).
 The repository contains the code for:
 
 <ul>
+    <li>M. Gaido et al., "Is "moby dick" a Whale or a Bird? Named Entities and Terminology in Speech Translation", EMNLP 2021</li>
     <li>A. Karakanta et al., "Between Flexibility and Consistency: Joint Generation of Captions and Subtitles", IWSLT 2021</li>
     <li>M. Gaido, B. Savoldi et al., "How to Split: the Effect of Word Segmentation on Gender Bias in Speech Translation", Findings of ACL 2021</li>
     <li>M. Gaido et al., "CTC-based Compression for Direct Speech Translation", EACL 2021</li>
@@ -17,6 +18,21 @@ The repository contains the code for:
     <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
 </ul>
 
+```bibtex
+@inproceedings{gaido-etal-2021-is-moby-dick,
+    title = {{Is ``moby dick'' a Whale or a Bird? Named Entities and Terminology in Speech Translation}},
+    author = "Gaido, Marco and
+      Rodríguez, Susana and
+      Negri, Matteo  and
+      Bentivogli, Luisa and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
+    month = nov,
+    year = "2021",
+    address = "Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics"
+}
+```
 ```bibtex
 @inproceedings{karakanta-etal-2021-between,
     title = "Between Flexibility and Consistency: Joint Generation of Captions and Subtitles",

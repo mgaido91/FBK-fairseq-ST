@@ -17,7 +17,7 @@
 # Details on the required annotated data can be found in the below paper.
 # If using, please cite:
 # M. Gaido et al., 2021. Is "moby dick" a Whale or a Bird? Named Entities and Terminology in Speech Translation,
-# Proceedings of Empirical Methods for Natural Language Processing 2021 (EMNLP)
+# Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)
 import argparse
 import spacy
 
