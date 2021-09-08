@@ -19,7 +19,8 @@ class ConvTransformerContextAwareEncoderLayer(ConvTransformerEncoderLayer):
             )
             self.context_gating_wi = Linear(self.embed_dim, self.embed_dim)
             self.context_gating_ws = Linear(self.embed_dim, self.embed_dim)
-            self.context_layer_norm = LayerNorm(self.embed_dim)
+            if self.context_attention_type == "sequential":
+                self.context_layer_norm = LayerNorm(self.embed_dim)
 
     def forward(
             self,
