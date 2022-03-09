@@ -9,6 +9,7 @@ If you use this code, please consider citing the related paper(s).
 The repository contains the code for:
 
 <ul>
+    <li>B. Savoldi et al., "Under the Morphosyntactic Lens: A Multifaceted Evaluation of Gender Bias in Speech Translation", ACL 2022</li>
     <li>M. Gaido et al., "Is "moby dick" a Whale or a Bird? Named Entities and Terminology in Speech Translation", EMNLP 2021</li>
     <li>A. Karakanta et al., "Between Flexibility and Consistency: Joint Generation of Captions and Subtitles", IWSLT 2021</li>
     <li>M. Gaido, B. Savoldi et al., "How to Split: the Effect of Word Segmentation on Gender Bias in Speech Translation", Findings of ACL 2021</li>
@@ -18,6 +19,22 @@ The repository contains the code for:
     <li>M. Gaido et al., "On Knowledge Distillation for Direct Speech Translation", CliC-IT 2020</li>
 </ul>
 
+
+```bibtex
+@inproceedings{savoldi-etal-2022-under-the-morphosyntactic,
+    title = {{Under the Morphosyntactic Lens: A Multifaceted Evaluation of Gender Bias in Speech Translation}},
+    author = "Savoldi, Beatrice  and
+      Gaido, Marco and
+      Bentivogli, Luisa and
+      Negri, Matteo  and
+      Turchi, Marco",
+    booktitle = "Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics",
+    month = may,
+    year = "2022",
+    address = "Dublin, Ireland",
+    publisher = "Association for Computational Linguistics"
+}
+```
 ```bibtex
 @inproceedings{gaido-etal-2021-is-moby-dick,
     title = {{Is ``moby dick'' a Whale or a Bird? Named Entities and Terminology in Speech Translation}},

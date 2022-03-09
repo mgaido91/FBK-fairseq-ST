@@ -1,0 +1,4 @@
+{"metrics": [
+{"dimensions": [], "filters": [{"dimension": "CATEGORY_TYPE", "min_val": "1", "max_val": "2"}]},
+{"dimensions": ["CATEGORY_GENDER"], "filters": [{"dimension": "CATEGORY_TYPE", "min_val": "1", "max_val": "2"}]}
+]}

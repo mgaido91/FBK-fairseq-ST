@@ -1,0 +1,9 @@
+{"metrics": [{"dimensions":[], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]}, 
+{"dimensions": ["gender"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["category"], "filters":[{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["class"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["class", "gender"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["class", "category"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["pos"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]},
+{"dimensions": ["pos", "gender"], "filters": [{"dimension": "category", "min_val": "1F", "max_val": "2M"}]}
+]}
